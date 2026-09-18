@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PHANTOM X - Special Force Banner Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Consolas', 'Segoe UI', monospace; }
+
+    /* EKSATONG SIZE NG SLIDER BANNER MO: 900px x 220px */
+    .banner-canvas {
+      width: 900px;
+      height: 220px;
+      background: radial-gradient(circle at center, #0a111e 0%, #030508 100%);
+      border: 2px solid #00ffcc;
+      border-radius: 6px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 25px;
+      box-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+      color: #fff;
+    }
+
+    /* Cyber Ambient Background Line Effects */
+    .banner-canvas::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent 49%, rgba(0, 255, 204, 0.05) 50%, transparent 51%);
+      background-size: 20px 100%;
+      pointer-events: none;
+    }
+
+    /* Left Side: Game Title & Branding */
+    .brand-section { width: 35%; z-index: 2; }
+    .brand-section h1 { font-size: 2rem; color: #fff; font-weight: 900; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0,255,204,0.5); }
+    .brand-section h1 span { color: #00ffcc; }
+    .brand-section .game-title { color: #ff0055; font-size: 0.95rem; font-weight: bold; letter-spacing: 3px; margin-top: -3px; text-shadow: 0 0 8px rgba(255,0,85,0.6); }
+    .brand-section .dev-tag { margin-top: 15px; font-size: 0.75rem; color: #888; border-left: 2px solid #00ffcc; padding-left: 8px; }
+
+    /* Center: Features List */
+    .features-section { width: 38%; z-index: 2; background: rgba(5, 8, 15, 0.85); border: 1px solid #1f2942; border-radius: 5px; padding: 8px 12px; }
+    .features-title { color: #00ffcc; font-size: 0.75rem; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; border-bottom: 1px solid #1a233a; padding-bottom: 3px; }
+    .features-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+    .feat-item { font-size: 0.75rem; color: #e0e6ed; display: flex; align-items: center; gap: 5px; }
+    .feat-item::before { content: '⚡'; color: #ff0055; font-size: 0.65rem; }
+
+    /* Right Side: Pricelist & Discord Link */
+    .price-section { width: 25%; z-index: 2; text-align: right; }
+    .price-box { background: rgba(255, 0, 85, 0.1); border: 1px solid #ff0055; border-radius: 5px; padding: 6px 10px; margin-bottom: 6px; box-shadow: 0 0 10px rgba(255, 0, 85, 0.2); }
+    .price-item { font-size: 0.85rem; font-weight: bold; color: #fff; }
+    .price-item span { color: #00ffcc; font-size: 0.95rem; }
+    .discord-tag { font-size: 0.65rem; color: #aaa; margin-top: 4px; word-break: break-all; }
+  </style>
+</head>
+<body style="background: #111; display: flex; justify-content: center; align-items: center; min-height: 100vh; flex-direction: column; gap: 15px;">
+
+  <h3 style="color: #888; font-family: sans-serif;">PHANTOM X - AUTO BANNER GENERATOR (RagnarX)</h3>
+
+  <!-- BANNER CANVAS CONTAINER -->
+  <div class="banner-canvas">
+    
+    <!-- LEFT: LOGO -->
+    <div class="brand-section">
+      <h1>PHANTOM <span>X</span></h1>
+      <div class="game-title">SPECIAL FORCE RUSH</div>
+      <div class="dev-tag">DEV: <strong>RagnarX</strong><br>STATUS: UNDETECTED</div>
+    </div>
+
+    <!-- CENTER: FEATURES -->
+    <div class="features-section">
+      <div class="features-title">VIP FEATURES PACK</div>
+      <div class="features-grid">
+        <div class="feat-item">AIMBOT</div>
+        <div class="feat-item">WALLHACK</div>
+        <div class="feat-item">ESP SYSTEM</div>
+        <div class="feat-item">EXP BOOST</div>
+        <div class="feat-item">CROSSHAIR</div>
+        <div class="feat-item">BIGBODY</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: PRICELIST -->
+    <div class="price-section">
+      <div class="price-box">
+        <div class="price-item">1 MONTH: <span>300 PHP</span></div>
+        <div class="price-item" style="margin-top:2px;">2 MONTHS: <span>500 PHP</span></div>
+      </div>
+      <div class="discord-tag">JOIN DISCORD FOR KEYS:<br><strong style="color:#5865F2;">discord.gg/kYmuhCSxaF</strong></div>
+    </div>
+
+  </div>
+
+  <p style="color: #666; font-size: 0.85rem; font-family: sans-serif;">👉 <strong>PAANO GAWING LARAWAN:</strong> I-screenshot (Snipping Tool / Win + Shift + S) ang poster box sa itaas at i-save bilang <code>.png</code> file!</p>
+
+</body>
+</html>

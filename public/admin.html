@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>PHANTOM X - Enterprise Suite</title>
+  <style>
+    :root { --bg: #030508; --card-bg: rgba(10, 14, 22, 0.95); --accent: #00ffcc; --danger: #ff0055; --text: #e0e6ed; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Consolas', monospace; }
+    body { background: var(--bg); color: var(--text); padding: 8px; width: 100vw; min-height: 100vh; overflow-x: hidden; display: flex; flex-direction: column; justify-content: space-between; }
+    .full-wrapper { width: 100%; max-width: 1100px; margin: 0 auto; }
+    
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #1a233a; padding-bottom: 6px; }
+    .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; margin-bottom: 8px; }
+    .stat-card { background: var(--card-bg); border: 1px solid #1a233a; padding: 6px 8px; border-radius: 3px; border-left: 3px solid var(--accent); }
+    .stat-card span { font-size: 0.65rem; color: #888; display: block; }
+    .stat-card strong { font-size: 0.95rem; color: #fff; }
+
+    .main-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
+    .card { background: var(--card-bg); border: 1px solid #1a233a; border-radius: 3px; padding: 8px; margin-bottom: 8px; }
+    .card h5 { color: var(--accent); margin-bottom: 4px; font-size: 0.8rem; }
+    
+    input, select { width: 100%; padding: 5px 7px; background: #070a10; border: 1px solid #1f2942; color: #fff; margin-bottom: 4px; border-radius: 2px; font-size: 0.75rem; }
+    .btn { background: var(--accent); color: #000; padding: 5px 8px; font-weight: bold; border: none; cursor: pointer; border-radius: 2px; font-size: 0.7rem; text-transform: uppercase; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-sm { padding: 2px 5px; font-size: 0.65rem; margin-left: 2px; }
+
+    .log-box { background: #020305; border: 1px solid #1a233a; border-radius: 2px; padding: 6px; font-size: 0.7rem; height: 110px; overflow-y: auto; color: var(--accent); }
+    
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    th, td { padding: 4px 6px; text-align: left; border-bottom: 1px solid #1a233a; font-size: 0.7rem; }
+    th { color: var(--accent); background: #070a10; }
+    .badge { padding: 2px 4px; border-radius: 2px; font-weight: bold; font-size: 0.6rem; }
+    .badge-active { background: rgba(0, 255, 204, 0.15); color: var(--accent); }
+    .badge-banned { background: rgba(255, 0, 85, 0.15); color: var(--danger); }
+    #adminPanel { display: none; }
+
+    /* FOOTER PAREHAS NA PAREHAS SA INDEX HOMEPAGE */
+    footer { border-top: 1px solid #1a233a; padding-top: 15px; text-align: center; font-size: 0.75rem; color: #666; margin-top: 10px; width: 100%; }
+    footer strong { color: var(--accent); }
+    footer a { color: #5865F2; text-decoration: none; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <div class="full-wrapper">
+    <div class="header">
+      <h4 style="color:#fff;">PHANTOM X <span style="color:var(--danger);">ENTERPRISE DASHBOARD</span></h4>
+      <!-- KAPAG CLINICK ANG HOMEPAGE O NAG-BACK, MAG-LOGOUT SEYA AUTOMATIC -->
+      <a href="/" onclick="logoutSession()" style="color:#888; text-decoration:none; font-size:0.75rem;">← Main Homepage</a>
+    </div>
+
+    <!-- AUTHENTICATION CONTAINER (LOCAL PC SECURED) -->
+    <div class="card" id="loginCard" style="max-width: 320px; margin: 50px auto; border-color: var(--danger);">
+      <h5 style="color:var(--danger); text-align:center; font-size:0.9rem;">🔒 LOCAL ADMIN AUTHENTICATION</h5>
+      <p style="font-size:0.65rem; color:#888; text-align:center; margin-bottom:10px;">Access restricted to Localhost system.</p>
+      
+      <input type="password" id="user" placeholder="ADMIN IDENTIFIER" autocomplete="off">
+      <input type="password" id="pass" placeholder="SECURITY KEYCODE" autocomplete="off">
+      <button class="btn" style="width:100%; background:var(--danger); color:#fff; margin-top:4px;" onclick="login()">AUTHORIZE ACCESS</button>
+      <div id="loginMsg" style="color:var(--danger); font-size:0.7rem; text-align:center; margin-top:6px;"></div>
+    </div>
+
+    <div id="adminPanel">
+      <div class="stats-bar">
+        <div class="stat-card"><span>SERVER RAM</span><strong id="statRAM">--%</strong></div>
+        <div class="stat-card"><span>TOTAL KEYS</span><strong id="statTotalKeys">0</strong></div>
+        <div class="stat-card"><span>ACTIVE KEYS</span><strong id="statActiveKeys" style="color:var(--accent);">0</strong></div>
+        <div class="stat-card"><span>BANNED KEYS</span><strong id="statBannedKeys" style="color:var(--danger);">0</strong></div>
+        <div class="stat-card"><span>PENDING RESETS</span><strong id="statPendingResets" style="color:#ffaa00;">0</strong></div>
+      </div>
+
+      <div class="main-grid">
+        <!-- LEFT COLUMN -->
+        <div>
+          <div class="card">
+            <h5>🔑 BATCH VIP KEY GENERATOR</h5>
+            <div style="display: flex; gap: 6px;">
+              <input type="text" id="clientName" placeholder="CLIENT / PREFIX" style="margin:0;">
+              <select id="keyDuration" style="margin:0; width: 25%;">
+                <option value="1-Day">1 Day</option>
+                <option value="7-Days">7 Days</option>
+                <option value="30-Days">30 Days</option>
+              </select>
+              <input type="number" id="keyAmount" value="1" min="1" max="20" placeholder="Qty" style="margin:0; width: 15%;">
+              <button class="btn" style="width:25%;" onclick="generateLicense()">GENERATE</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h5 style="color:#00ffcc;">⚡ QUICK RESELLER DISPENSER</h5>
+            <div style="display:flex; gap:6px;">
+              <button class="btn" style="width:33%; background:rgba(0,255,204,0.1); border:1px solid #00ffcc; color:#00ffcc;" onclick="quickGen('1-Day')">+ 1 DAY KEY</button>
+              <button class="btn" style="width:33%; background:rgba(255,170,0,0.1); border:1px solid #ffaa00; color:#ffaa00;" onclick="quickGen('7-Days')">+ 7 DAYS KEY</button>
+              <button class="btn" style="width:34%; background:rgba(255,0,85,0.1); border:1px solid #ff0055; color:#ff0055;" onclick="quickGen('30-Days')">+ 30 DAYS KEY</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h5 style="color:var(--danger);">🔄 HWID RESET APPROVAL QUEUE</h5>
+            <table>
+              <thead>
+                <tr><th>USER</th><th>KEY</th><th>REASON</th><th>STATUS</th><th>ACTIONS</th></tr>
+              </thead>
+              <tbody id="resetReqTableBody"><tr><td colspan="5" style="color:#666;">No pending requests.</td></tr></tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <h5 style="color:var(--accent);">🎮 SPECIAL FORCE RUSH LOADER FILE MANAGER</h5>
+            <form action="/upload" method="POST" enctype="multipart/form-data" style="display:flex; gap:6px; margin-bottom:8px;">
+              <input type="file" name="file" required style="margin:0;">
+              <button type="submit" class="btn" style="background:var(--accent); width:120px;">UPLOAD SF LOADER</button>
+            </form>
+            <div id="fileList">Scanning loader files...</div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <h5>📑 LICENSE DATABASE MANAGER</h5>
+              <input type="text" id="searchFilter" onkeyup="filterKeys()" placeholder="🔍 Search..." style="margin:0; width:160px; padding:3px;">
+            </div>
+            <table>
+              <thead>
+                <tr><th>CLIENT</th><th>KEY</th><th>STATUS</th><th>HWID</th><th>EXPIRES</th><th>ACTIONS</th></tr>
+              </thead>
+              <tbody id="keyTableBody"><tr><td colspan="6" style="color:#666;">No keys found.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div>
+          <div class="card">
+            <h5 style="color:#ff0055;">🎵 BACKGROUND MUSIC MP3 MANAGER</h5>
+            <form action="/upload-music" method="POST" enctype="multipart/form-data" style="display:flex; gap:4px;">
+              <input type="file" name="bgMusic" accept="audio/mp3,audio/*" required style="margin:0;">
+              <button type="submit" class="btn" style="background:#ff0055; color:#fff; width:100px;">UPLOAD MP3</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h5 style="color:#00ffcc;">🖼️ HOMEPAGE SLIDER MANAGER</h5>
+            <form action="/upload-slider" method="POST" enctype="multipart/form-data" style="display:flex; gap:4px; margin-bottom:8px;">
+              <input type="file" name="sliderImage" accept="image/*" required style="margin:0;">
+              <button type="submit" class="btn" style="background:#00ffcc; color:#000; width:90px;">UPLOAD</button>
+            </form>
+            <div id="adminSliderList" style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">Loading sliders...</div>
+          </div>
+
+          <div class="card">
+            <h5 style="color:#007dfe;">💙 GCASH QR & PAYMENT DETAILS</h5>
+            <form action="/upload-gcash" method="POST" enctype="multipart/form-data" style="display:flex; gap:4px; margin-bottom:4px;">
+              <input type="file" name="gcashQr" accept="image/*" required style="margin:0;">
+              <button type="submit" class="btn" style="background:#007dfe; color:#fff; width:100px;">UPLOAD QR</button>
+            </form>
+            <input type="text" id="gcashNameInput" placeholder="GCash Account Name">
+            <input type="text" id="gcashNumInput" placeholder="GCash Account No.">
+            <button class="btn" style="width:100%; background:#007dfe; color:#fff;" onclick="saveSettings()">SAVE GCASH DETAILS</button>
+          </div>
+
+          <div class="card">
+            <h5>🛠️ MAINTENANCE SYSTEM</h5>
+            <button class="btn" id="maintBtn" style="width:100%;" onclick="toggleMaintenance()">TOGGLE MAINTENANCE</button>
+          </div>
+
+          <div class="card">
+            <h5>💾 BACKUP & RESTORE DB</h5>
+            <div style="display:flex; gap:4px;">
+              <a href="/api/backup-db" class="btn" style="background:#fff; text-align:center; width:50%; text-decoration:none; padding:5px 0;">BACKUP JSON</a>
+              <form action="/api/restore-db" method="POST" enctype="multipart/form-data" style="width:50%;">
+                <input type="file" name="dbBackup" accept=".json" required style="display:none;" id="dbFileInput" onchange="this.form.submit()">
+                <button type="button" class="btn" style="background:var(--accent); width:100%;" onclick="document.getElementById('dbFileInput').click()">RESTORE</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <h5>📢 BROADCAST & DISCORD WEBHOOK</h5>
+            <input type="text" id="broadcastInput" placeholder="Announcement text">
+            <input type="text" id="versionInput" placeholder="Version (1.0.0)">
+            <input type="text" id="webhookInput" placeholder="Discord Webhook URL">
+            <button class="btn" style="width:100%; background:#7289da; color:#fff;" onclick="saveSettings()">SAVE CONFIG</button>
+          </div>
+
+          <div class="card">
+            <h5>📋 SYSTEM AUDIT LOG</h5>
+            <div class="log-box" id="auditLogBox">Loading...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXACT MATCH FOOTER FROM INDEX.HTML (NAKA-CENTER) -->
+  <footer>
+    <p>DEVELOPED BY: <strong>RagnarX</strong> | PHANTOM X ENGINE v1.0 | <span style="color:var(--accent);">NODE: PH-MANILA-01</span></p>
+    <p style="margin-top:4px;">OFFICIAL DISCORD: <a href="https://discord.gg/kYmuhCSxaF" target="_blank">discord.gg/kYmuhCSxaF</a></p>
+  </footer>
+
+  <script>
+    let currentMaintStatus = false;
+    let allKeysData = [];
+
+    // CHECK SESSION ON PAGE LOAD & ON BROWSER BACK BUTTON
+    window.addEventListener('pageshow', function(event) {
+      const token = sessionStorage.getItem('adminToken');
+      if (!token) {
+        showLogin();
+      } else {
+        fetch('/api/verify-session', {
+          headers: { 'Authorization': token }
+        }).then(r => r.json()).then(res => {
+          if (res.valid) {
+            document.getElementById('loginCard').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'block';
+            initAdminData();
+          } else {
+            logoutSession();
+          }
+        });
+      }
+    });
+
+    function showLogin() {
+      document.getElementById('loginCard').style.display = 'block';
+      document.getElementById('adminPanel').style.display = 'none';
+    }
+
+    function logoutSession() {
+      const token = sessionStorage.getItem('adminToken');
+      if(token) {
+        fetch('/api/logout', { method: 'POST', headers: { 'Authorization': token } });
+      }
+      sessionStorage.removeItem('adminToken');
+      showLogin();
+    }
+
+    function login() {
+      const username = document.getElementById('user').value.trim();
+      const password = document.getElementById('pass').value.trim();
+      
+      fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      }).then(res => res.json()).then(d => {
+        if(d.success) {
+          sessionStorage.setItem('adminToken', d.token);
+          document.getElementById('user').value = '';
+          document.getElementById('pass').value = '';
+          document.getElementById('loginCard').style.display = 'none';
+          document.getElementById('adminPanel').style.display = 'block';
+          initAdminData();
+        } else {
+          document.getElementById('loginMsg').innerText = 'Access Denied: Invalid Credentials!';
+        }
+      }).catch(err => {
+        document.getElementById('loginMsg').innerText = 'Connection Error / Access Restricted.';
+      });
+    }
+
+    function initAdminData() {
+      fetch('/api/settings').then(r => r.json()).then(d => {
+        currentMaintStatus = d.maintenance;
+        document.getElementById('versionInput').value = d.version;
+        document.getElementById('webhookInput').value = d.webhook || '';
+        document.getElementById('broadcastInput').value = d.broadcast || '';
+        document.getElementById('gcashNameInput').value = d.gcashName || '';
+        document.getElementById('gcashNumInput').value = d.gcashNumber || '';
+        updateMaintBtnUI();
+      });
+
+      setInterval(updateStatsAndLogs, 2000);
+      updateStatsAndLogs();
+
+      loadKeysTable();
+      loadResetRequests();
+      loadSlidersList();
+      loadLoaderFiles();
+    }
+
+    function updateStatsAndLogs() {
+      fetch('/api/server-stats').then(r=>r.json()).then(s => {
+        document.getElementById('statRAM').innerText = `${s.memoryPercent}% (${s.freeMemMB}MB)`;
+        document.getElementById('statTotalKeys').innerText = s.totalKeys;
+        document.getElementById('statActiveKeys').innerText = s.activeKeys;
+        document.getElementById('statBannedKeys').innerText = s.bannedKeys || 0;
+        document.getElementById('statPendingResets').innerText = s.pendingResets;
+      });
+
+      fetch('/api/logs').then(r=>r.json()).then(logs => {
+        document.getElementById('auditLogBox').innerHTML = logs.map(l => `<div style="margin-bottom:2px;">${l}</div>`).join('');
+      });
+    }
+
+    function loadSlidersList() {
+      fetch('/api/sliders').then(r => r.json()).then(images => {
+        const container = document.getElementById('adminSliderList');
+        if(!images.length) { container.innerHTML = '<span style="color:#666; font-size:0.7rem;">No slider images.</span>'; return; }
+        container.innerHTML = images.map(img => `
+          <div style="border:1px solid #1a233a; padding:4px; border-radius:3px; text-align:center; background:#000;">
+            <img src="/slider-images/${img}" style="width:100%; height:50px; object-fit:cover; border-radius:2px;">
+            <button class="btn btn-sm btn-danger" style="margin-top:3px; width:100%;" onclick="deleteSlider('${img}')">DELETE</button>
+          </div>
+        `).join('');
+      });
+    }
+
+    function deleteSlider(filename) {
+      fetch(`/api/sliders/${filename}`, { method: 'DELETE' }).then(() => loadSlidersList());
+    }
+
+    function loadLoaderFiles() {
+      fetch('/api/files').then(r => r.json()).then(files => {
+        const container = document.getElementById('fileList');
+        if(!files.length) { container.innerHTML = '<span style="color:#666; font-size:0.7rem;">No SF Rush loaders uploaded.</span>'; return; }
+        container.innerHTML = files.map(file => `
+          <div style="background:rgba(5,8,15,0.8); border:1px solid #1f2942; padding:4px 8px; border-radius:3px; margin-top:3px; display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:0.7rem; color:#fff;">🎮 ${file}</span>
+            <button class="btn btn-sm btn-danger" onclick="deleteFile('${file}')">DEL</button>
+          </div>
+        `).join('');
+      });
+    }
+
+    function deleteFile(filename) {
+      fetch(`/api/files/${filename}`, { method: 'DELETE' }).then(() => loadLoaderFiles());
+    }
+
+    function saveSettings() {
+      const version = document.getElementById('versionInput').value.trim();
+      const webhook = document.getElementById('webhookInput').value.trim();
+      const broadcast = document.getElementById('broadcastInput').value.trim();
+      const gcashName = document.getElementById('gcashNameInput').value.trim();
+      const gcashNumber = document.getElementById('gcashNumInput').value.trim();
+
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version, webhook, broadcast, gcashName, gcashNumber })
+      }).then(() => alert('Config Saved!'));
+    }
+
+    function toggleMaintenance() {
+      currentMaintStatus = !currentMaintStatus;
+      fetch('/api/maintenance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maintenance: currentMaintStatus })
+      }).then(() => updateMaintBtnUI());
+    }
+
+    function updateMaintBtnUI() {
+      const btn = document.getElementById('maintBtn');
+      btn.innerText = currentMaintStatus ? "MAINTENANCE: ACTIVE" : "MAINTENANCE: OFF";
+      btn.style.background = currentMaintStatus ? "var(--danger)" : "var(--accent)";
+      btn.style.color = currentMaintStatus ? "#fff" : "#000";
+    }
+
+    function loadResetRequests() {
+      fetch('/api/reset-requests').then(r => r.json()).then(reqs => {
+        const tbody = document.getElementById('resetReqTableBody');
+        const pending = reqs.filter(r => r.status === 'PENDING');
+        if(!pending.length) { tbody.innerHTML = '<tr><td colspan="5" style="color:#666;">No pending requests.</td></tr>'; return; }
+        tbody.innerHTML = pending.map(r => `
+          <tr>
+            <td style="color:#fff;">${r.clientName}</td>
+            <td style="color:var(--accent);">${r.key}</td>
+            <td style="font-size:0.65rem;">${r.reason}</td>
+            <td><span class="badge badge-banned">${r.status}</span></td>
+            <td>
+              <button class="btn btn-sm" onclick="processReset(${r.id}, 'APPROVE')">APPROVE</button>
+              <button class="btn btn-sm btn-danger" onclick="processReset(${r.id}, 'REJECT')">REJECT</button>
+            </td>
+          </tr>
+        `).join('');
+      });
+    }
+
+    function processReset(id, action) {
+      fetch('/api/process-hwid-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action })
+      }).then(() => { loadResetRequests(); loadKeysTable(); });
+    }
+
+    function generateLicense() {
+      const clientName = document.getElementById('clientName').value.trim();
+      const duration = document.getElementById('keyDuration').value;
+      const amount = document.getElementById('keyAmount').value;
+
+      if(!clientName) return alert('Enter Client Name or Prefix!');
+
+      fetch('/api/generate-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientName, duration, amount })
+      }).then(() => { document.getElementById('clientName').value = ''; loadKeysTable(); });
+    }
+
+    function quickGen(duration) {
+      fetch('/api/generate-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientName: "QuickSale", duration, amount: 1 })
+      }).then(() => loadKeysTable());
+    }
+
+    function loadKeysTable() {
+      fetch('/api/keys').then(r => r.json()).then(keys => {
+        allKeysData = keys;
+        renderKeysTable(keys);
+      });
+    }
+
+    function renderKeysTable(keys) {
+      const tbody = document.getElementById('keyTableBody');
+      if(!keys.length) { tbody.innerHTML = '<tr><td colspan="6" style="color:#666;">No keys found.</td></tr>'; return; }
+      tbody.innerHTML = keys.map(k => `
+        <tr>
+          <td style="color:#fff; font-weight:bold;">👤 ${k.clientName}</td>
+          <td style="color:var(--accent);">${k.key}</td>
+          <td><span class="badge ${k.status === 'BANNED' ? 'badge-banned' : 'badge-active'}">${k.status}</span></td>
+          <td>${k.hwid === 'UNBOUND' ? 'UNBOUND' : 'BOUND'}</td>
+          <td style="font-size:0.65rem; color:#aaa;">${new Date(k.expiresAt).toLocaleDateString()}</td>
+          <td>
+            <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${k.key}'); alert('Copied!');">COPY</button>
+            <button class="btn btn-sm" style="background:#ffaa00;" onclick="fetch('/api/keys/reset-hwid',{method:'POST',headers:{'Content-Type Aller': 'application/json'},body:JSON.stringify({id:${k.id}})}).then(()=>loadKeysTable())">RESET</button>
+            <button class="btn btn-sm" style="background:${k.status === 'BANNED' ? '#00ffcc' : '#ff0055'}; color:#000;" onclick="fetch('/api/keys/toggle-ban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:${k.id}})}).then(()=>loadKeysTable())">${k.status === 'BANNED' ? 'UNBAN' : 'BAN'}</button>
+            <button class="btn btn-sm btn-danger" onclick="fetch('/api/keys/${k.id}',{method:'DELETE'}).then(()=>loadKeysTable())">DEL</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function filterKeys() {
+      const query = document.getElementById('searchFilter').value.toLowerCase();
+      renderKeysTable(allKeysData.filter(k => k.clientName.toLowerCase().includes(query) || k.key.toLowerCase().includes(query)));
+    }
+  </script>
+</body>
+</html>
