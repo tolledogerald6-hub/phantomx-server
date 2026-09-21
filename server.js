@@ -50,7 +50,21 @@ function loadDB() {
       resetRequests: [],
       logs: [],
       coupons: [],
-      pastes: [],
+      // 📌 PERMANENT DEFAULT PASTES (Hindi mabubura kahit mag-restart ang server)
+      pastes: [
+        {
+          slug: "version",
+          content: "1.0.0",
+          contentLength: 5,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "ultra-pass",
+          content: "PhantomPass2026",
+          contentLength: 15,
+          updatedAt: new Date().toLocaleString()
+        }
+      ],
       downloadCount: 0,
       maintenance: false, 
       loaderVersion: "1.0.0", 
