@@ -43,21 +43,6 @@ if (!fs.existsSync(sliderFolder)) fs.mkdirSync(sliderFolder);
 if (!fs.existsSync(chatUploadsFolder)) fs.mkdirSync(chatUploadsFolder, { recursive: true });
 if (!fs.existsSync(trainingUploadsFolder)) fs.mkdirSync(trainingUploadsFolder, { recursive: true });
 
-function restrictToLocalhost(req, res, next) {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.set('Pragma', 'no-cache');
-  res.set('Expires', '0');
-
-  const remoteIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
-  const isLocal = remoteIp === '127.0.0.1' || remoteIp === '::1' || remoteIp === '::ffff:127.0.0.1';
-  
-  if (isLocal) {
-    next();
-  } else {
-    res.status(403).send('<h1 style="color:red; font-family:monospace; text-align:center; margin-top:50px;">403 FORBIDDEN: Admin panel is restricted to Localhost PC only.</h1>');
-  }
-}
-
 function loadDB() {
   if (!fs.existsSync(dbFile)) {
     const initialData = { 
@@ -132,7 +117,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-app.use('/admin.html', restrictToLocalhost);
+// SERVE PUBLIC FILES AND ADMIN PANEL DIRECTLY
 app.use(express.static('public'));
 app.use('/slider-images', express.static(sliderFolder));
 app.use('/chat-files', express.static(chatUploadsFolder));
@@ -151,7 +136,7 @@ app.get('/files/:filename', (req, res) => {
   }
 });
 
-// BULK KEY EXPORTER (.TXT)
+// EXPORT KEYS (.TXT)
 app.get('/api/export-keys-txt', (req, res) => {
   const db = loadDB();
   const activeKeys = db.keys.filter(k => k.status === 'ACTIVE');
@@ -169,7 +154,7 @@ app.get('/api/export-keys-txt', (req, res) => {
   res.send(txtContent);
 });
 
-// SUBMIT GCASH TRANSACTION FOR DISCORD VERIFICATION
+// SUBMIT TRANSACTION TO DISCORD
 app.post('/api/claim-key', (req, res) => {
   const { gcashRef, duration } = req.body;
   if (!gcashRef || gcashRef.trim().length < 6) {
@@ -194,8 +179,8 @@ app.post('/api/claim-key', (req, res) => {
   });
 });
 
-// AUTH API
-app.post('/api/login', restrictToLocalhost, (req, res) => {
+// AUTHENTICATION APIs
+app.post('/api/login', (req, res) => {
   const user = (req.body.username || '').trim();
   const pass = (req.body.password || '').trim();
 
@@ -222,7 +207,7 @@ app.get('/api/verify-session', (req, res) => {
   else res.json({ valid: false });
 });
 
-// 24-HOUR EXPIRATION AUTO REMINDER
+// EXPIRATION SCANNER
 setInterval(() => {
   const db = loadDB();
   const now = new Date().getTime();
@@ -255,7 +240,8 @@ setInterval(() => {
 app.post('/api/report-crack-attempt', (req, res) => {
   const { key, hwid, reason } = req.body;
   const db = loadDB();
-  const foundKey = db.keys.find(k => k.key === (key || '').trim());
+  const cleanKey = (key || '').toString().trim().toUpperCase();
+  const foundKey = db.keys.find(k => k.key.trim().toUpperCase() === cleanKey);
 
   if (foundKey) {
     foundKey.status = "BANNED";
@@ -297,7 +283,7 @@ app.post('/api/verify-coupon', (req, res) => {
   else res.json({ success: false, message: "Invalid or expired coupon code." });
 });
 
-// CHAT & TRAINING APIS
+// CHATBOX & TRAINING MESSENGER APIs
 app.get('/api/chat/messages', (req, res) => res.json(chatMessages));
 app.post('/api/chat/send', upload.single('chatAttachment'), (req, res) => {
   const { sender, text } = req.body;
@@ -435,7 +421,8 @@ app.post('/api/restore-db', upload.single('dbBackup'), (req, res) => {
 app.post('/api/request-hwid-reset', (req, res) => {
   const { key, reason } = req.body;
   const db = loadDB();
-  const foundKey = db.keys.find(k => k.key === (key || '').trim());
+  const cleanKey = (key || '').toString().trim().toUpperCase();
+  const foundKey = db.keys.find(k => k.key.trim().toUpperCase() === cleanKey);
 
   if (!foundKey) return res.status(404).json({ success: false, message: "Key not found!" });
 
@@ -520,7 +507,8 @@ app.delete('/api/files/:name', (req, res) => {
 app.post('/api/check-key-status', (req, res) => {
   const { key } = req.body;
   const db = loadDB();
-  const foundKey = db.keys.find(k => k.key === (key || '').trim());
+  const cleanKey = (key || '').toString().trim().toUpperCase();
+  const foundKey = db.keys.find(k => k.key.trim().toUpperCase() === cleanKey);
 
   if (!foundKey) return res.json({ success: false, message: "License key does not exist." });
 
@@ -613,35 +601,51 @@ app.delete('/api/keys/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// ROBUST C++ VALIDATION ENDPOINT
 app.post('/api/validate-key', (req, res) => {
   const { key, userHwid, clientVersion } = req.body;
   const db = loadDB();
 
-  if (db.maintenance) return res.json({ success: false, message: "System Under Maintenance!" });
+  if (db.maintenance) {
+    return res.json({ success: false, message: "System Under Maintenance!" });
+  }
 
   if (clientVersion && clientVersion !== db.loaderVersion) {
     return res.json({ success: false, message: `UPDATE REQUIRED: Loader v${db.loaderVersion} available!` });
   }
 
-  const foundKey = db.keys.find(k => k.key === key.trim());
-  if (!foundKey) return res.json({ success: false, message: "Invalid Key!" });
-  if (foundKey.status === "BANNED") return res.json({ success: false, message: "KEY BANNED!" });
+  if (!key) {
+    return res.json({ success: false, message: "Key parameter missing!" });
+  }
+
+  const cleanInputKey = key.toString().trim().toUpperCase();
+  const foundKey = db.keys.find(k => k.key.trim().toUpperCase() === cleanInputKey);
+
+  if (!foundKey) {
+    return res.json({ success: false, message: "Invalid Key!" });
+  }
+
+  if (foundKey.status === "BANNED") {
+    return res.json({ success: false, message: "BANNED" });
+  }
 
   if (new Date(foundKey.expiresAt) < new Date()) {
     foundKey.status = "EXPIRED";
     saveDB(db);
-    return res.json({ success: false, message: "KEY EXPIRED!" });
+    return res.json({ success: false, message: "EXPIRED" });
   }
 
+  const cleanUserHwid = (userHwid || "UNKNOWN").toString().trim();
+
   if (foundKey.hwid === "UNBOUND") {
-    foundKey.hwid = userHwid;
+    foundKey.hwid = cleanUserHwid;
     saveDB(db);
-    addSystemLog(`HWID bound [${foundKey.clientName}]: ${userHwid}`, req);
-    return res.json({ success: true, message: `Welcome ${foundKey.clientName}!` });
-  } else if (foundKey.hwid === userHwid) {
-    return res.json({ success: true, message: `Welcome ${foundKey.clientName}!` });
+    addSystemLog(`HWID bound [${foundKey.clientName}]: ${cleanUserHwid}`, req);
+    return res.json({ success: true, clientName: foundKey.clientName, expiresAt: foundKey.expiresAt, message: `Welcome ${foundKey.clientName}!` });
+  } else if (foundKey.hwid === cleanUserHwid) {
+    return res.json({ success: true, clientName: foundKey.clientName, expiresAt: foundKey.expiresAt, message: `Welcome ${foundKey.clientName}!` });
   } else {
-    return res.json({ success: false, message: "HWID MISMATCH!" });
+    return res.json({ success: false, message: "HWID MISMATCH" });
   }
 });
 
