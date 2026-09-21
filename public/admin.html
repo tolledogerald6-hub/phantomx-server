@@ -22,8 +22,8 @@
     .card { background: var(--card-bg); border: 1px solid #1a233a; border-radius: 3px; padding: 8px; margin-bottom: 8px; }
     .card h5 { color: var(--accent); margin-bottom: 4px; font-size: 0.8rem; }
     
-    input, select { width: 100%; padding: 5px 7px; background: #070a10; border: 1px solid #1f2942; color: #fff; margin-bottom: 4px; border-radius: 2px; font-size: 0.75rem; }
-    .btn { background: var(--accent); color: #000; padding: 5px 8px; font-weight: bold; border: none; cursor: pointer; border-radius: 2px; font-size: 0.7rem; text-transform: uppercase; }
+    input, select, textarea { width: 100%; padding: 5px 7px; background: #070a10; border: 1px solid #1f2942; color: #fff; margin-bottom: 4px; border-radius: 2px; font-size: 0.75rem; }
+    .btn { background: var(--accent); color: #000; padding: 5px 8px; font-weight: bold; border: none; cursor: pointer; border-radius: 2px; font-size: 0.7rem; text-transform: uppercase; display: inline-block; text-align: center; text-decoration: none; }
     .btn-danger { background: var(--danger); color: #fff; }
     .btn-sm { padding: 2px 5px; font-size: 0.65rem; margin-left: 2px; }
 
@@ -47,7 +47,11 @@
   <div class="full-wrapper">
     <div class="header">
       <h4 style="color:#fff;">PHANTOM X <span style="color:var(--danger);">ENTERPRISE DASHBOARD</span></h4>
-      <a href="/" onclick="logoutSession()" style="color:#888; text-decoration:none; font-size:0.75rem;">← Main Homepage</a>
+      <div>
+        <!-- NEW PASTEBIN NAV BUTTON -->
+        <a href="#pastebinSection" class="btn" style="background:#ffaa00; color:#000; margin-right:5px;">📋 PHANTOM PASTEBIN</a>
+        <a href="/" onclick="logoutSession()" style="color:#888; text-decoration:none; font-size:0.75rem;">← Main Homepage</a>
+      </div>
     </div>
 
     <!-- AUTHENTICATION CONTAINER -->
@@ -74,6 +78,20 @@
       <div class="main-grid">
         <!-- LEFT COLUMN -->
         <div>
+          <!-- PASTEBIN / RAW STORAGE CARD -->
+          <div class="card" id="pastebinSection" style="border:1px solid #ffaa00;">
+            <h5 style="color:#ffaa00;">📋 PHANTOM PASTEBIN SERVER (NO CHARACTER LIMIT)</h5>
+            <p style="font-size:0.65rem; color:#aaa; margin-bottom:5px;">Gumawa ng raw paste storage para sa C++ Loader, Keys, o Announcement Text. Pwede mong i-fetch online gamit ang direct raw link.</p>
+            <input type="text" id="pasteSlug" placeholder="Custom URL Slug / Name (e.g. version-check, ultra-pass, raw-keys)">
+            <textarea id="pasteContent" rows="6" placeholder="I-paste dito ang kahit gaano kahabang Code, JSON, Keys, o Text (NO LIMIT)..."></textarea>
+            <button class="btn" style="background:#ffaa00; color:#000; width:100%;" onclick="savePaste()">💾 SAVE & CREATE PASTE</button>
+
+            <div style="margin-top:8px;">
+              <h6 style="color:var(--accent); font-size:0.7rem; margin-bottom:3px;">EXISTING PASTES:</h6>
+              <div id="pasteListContainer">Loading pastes...</div>
+            </div>
+          </div>
+
           <div class="card">
             <h5>🔑 BATCH VIP KEY GENERATOR</h5>
             <div style="display: flex; gap: 6px;">
@@ -97,7 +115,6 @@
             </div>
           </div>
 
-          <!-- FEATURE 5: DISCOUNT COUPON MANAGER -->
           <div class="card">
             <h5 style="color:#ffaa00;">🎟️ PROMO & DISCOUNT COUPON MANAGER</h5>
             <div style="display:flex; gap:6px; margin-bottom:6px;">
@@ -289,6 +306,7 @@
       loadSlidersList();
       loadLoaderFiles();
       loadCouponsList();
+      loadPastesList();
     }
 
     function updateStatsAndLogs() {
@@ -304,6 +322,56 @@
       fetch('/api/logs').then(r=>r.json()).then(logs => {
         document.getElementById('auditLogBox').innerHTML = logs.map(l => `<div style="margin-bottom:2px;">${l}</div>`).join('');
       });
+    }
+
+    /* PASTEBIN API FUNCTIONS */
+    function savePaste() {
+      const slug = document.getElementById('pasteSlug').value.trim();
+      const content = document.getElementById('pasteContent').value;
+
+      if (!content) return alert("Content cannot be empty!");
+
+      fetch('/api/pastes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, content })
+      }).then(r => r.json()).then(d => {
+        if (d.success) {
+          alert(`Paste Created/Updated! Access URL: ${window.location.origin}/raw/${d.slug}`);
+          document.getElementById('pasteSlug').value = '';
+          document.getElementById('pasteContent').value = '';
+          loadPastesList();
+        }
+      });
+    }
+
+    function loadPastesList() {
+      fetch('/api/pastes').then(r => r.json()).then(pastes => {
+        const box = document.getElementById('pasteListContainer');
+        if (!pastes || !pastes.length) { box.innerHTML = '<span style="color:#666; font-size:0.7rem;">No pastes created.</span>'; return; }
+        
+        box.innerHTML = pastes.map(p => `
+          <div style="background:rgba(5,8,15,0.8); border:1px solid #ffaa00; padding:4px 8px; border-radius:3px; margin-top:3px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <a href="/raw/${p.slug}" target="_blank" style="color:#ffaa00; font-weight:bold; text-decoration:none; font-size:0.7rem;">🔗 /raw/${p.slug}</a>
+              <span style="font-size:0.58rem; color:#888; margin-left:5px;">(${p.contentLength} chars)</span>
+            </div>
+            <div>
+              <button class="btn btn-sm" style="background:#00ffcc; color:#000;" onclick="copyRawUrl('${window.location.origin}/raw/${p.slug}')">COPY LINK</button>
+              <button class="btn btn-sm btn-danger" onclick="deletePaste('${p.slug}')">DEL</button>
+            </div>
+          </div>
+        `).join('');
+      });
+    }
+
+    function copyRawUrl(url) {
+      navigator.clipboard.writeText(url);
+      alert("Raw URL Copied to Clipboard!");
+    }
+
+    function deletePaste(slug) {
+      fetch(`/api/pastes/${slug}`, { method: 'DELETE' }).then(() => loadPastesList());
     }
 
     function loadCouponsList() {
