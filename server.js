@@ -19,8 +19,8 @@ if (fs.existsSync(path.join(__dirname, '.env'))) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const ADMIN_USER = process.env.ADMIN_USER || "RAGNARX_ADMIN";
-const ADMIN_PASS = process.env.ADMIN_PASS || "PhantomX_SecurePass_2026!";
+const ADMIN_USER = process.env.ADMIN_USER || "ADMIN";
+const ADMIN_PASS = process.env.ADMIN_PASS || "2026!";
 
 let activeSessions = new Set();
 let activeLoaderClients = new Map();
