@@ -48,7 +48,6 @@
     <div class="header">
       <h4 style="color:#fff;">PHANTOM X <span style="color:var(--danger);">ENTERPRISE DASHBOARD</span></h4>
       <div>
-        <!-- NEW PASTEBIN NAV BUTTON -->
         <a href="#pastebinSection" class="btn" style="background:#ffaa00; color:#000; margin-right:5px;">📋 PHANTOM PASTEBIN</a>
         <a href="/" onclick="logoutSession()" style="color:#888; text-decoration:none; font-size:0.75rem;">← Main Homepage</a>
       </div>
@@ -80,14 +79,17 @@
         <div>
           <!-- PASTEBIN / RAW STORAGE CARD -->
           <div class="card" id="pastebinSection" style="border:1px solid #ffaa00;">
-            <h5 style="color:#ffaa00;">📋 PHANTOM PASTEBIN SERVER (NO CHARACTER LIMIT)</h5>
-            <p style="font-size:0.65rem; color:#aaa; margin-bottom:5px;">Gumawa ng raw paste storage para sa C++ Loader, Keys, o Announcement Text. Pwede mong i-fetch online gamit ang direct raw link.</p>
-            <input type="text" id="pasteSlug" placeholder="Custom URL Slug / Name (e.g. version-check, ultra-pass, raw-keys)">
-            <textarea id="pasteContent" rows="6" placeholder="I-paste dito ang kahit gaano kahabang Code, JSON, Keys, o Text (NO LIMIT)..."></textarea>
-            <button class="btn" style="background:#ffaa00; color:#000; width:100%;" onclick="savePaste()">💾 SAVE & CREATE PASTE</button>
+            <h5 style="color:#ffaa00;">📋 DYNAMIC PHANTOM PASTEBIN (EDITABLE PERMANENT LINK)</h5>
+            <p style="font-size:0.65rem; color:#aaa; margin-bottom:5px;">Isang permanenteng URL lang na pwedeng palit-palitan ang nilalaman anytime nang hindi nagbabago ang link.</p>
+            <input type="text" id="pasteSlug" placeholder="Custom URL Name (e.g. ultra-pass, version-check, announcement)">
+            <textarea id="pasteContent" rows="7" placeholder="I-paste dito ang bagong Password, Code, JSON, o Text (NO CHARACTER LIMIT)..."></textarea>
+            <div style="display:flex; gap:4px;">
+              <button class="btn" style="background:#ffaa00; color:#000; width:70%;" onclick="savePaste()">💾 SAVE / UPDATE PASTE</button>
+              <button class="btn" style="background:#333; color:#fff; width:30%;" onclick="clearPasteForm()">CLEAR</button>
+            </div>
 
-            <div style="margin-top:8px;">
-              <h6 style="color:var(--accent); font-size:0.7rem; margin-bottom:3px;">EXISTING PASTES:</h6>
+            <div style="margin-top:10px;">
+              <h6 style="color:var(--accent); font-size:0.7rem; margin-bottom:4px;">ACTIVE PERMANENT LINKS:</h6>
               <div id="pasteListContainer">Loading pastes...</div>
             </div>
           </div>
@@ -229,6 +231,7 @@
   <script>
     let currentMaintStatus = false;
     let allKeysData = [];
+    let cachedPastes = [];
 
     window.addEventListener('pageshow', function(event) {
       const token = sessionStorage.getItem('adminToken');
@@ -324,7 +327,12 @@
       });
     }
 
-    /* PASTEBIN API FUNCTIONS */
+    /* EDITABLE PASTEBIN SYSTEM FUNCTIONS */
+    function clearPasteForm() {
+      document.getElementById('pasteSlug').value = '';
+      document.getElementById('pasteContent').value = '';
+    }
+
     function savePaste() {
       const slug = document.getElementById('pasteSlug').value.trim();
       const content = document.getElementById('pasteContent').value;
@@ -337,9 +345,7 @@
         body: JSON.stringify({ slug, content })
       }).then(r => r.json()).then(d => {
         if (d.success) {
-          alert(`Paste Created/Updated! Access URL: ${window.location.origin}/raw/${d.slug}`);
-          document.getElementById('pasteSlug').value = '';
-          document.getElementById('pasteContent').value = '';
+          alert(`Paste Saved Successfully!\nRaw Link: ${window.location.origin}/raw/${d.slug}`);
           loadPastesList();
         }
       });
@@ -347,16 +353,18 @@
 
     function loadPastesList() {
       fetch('/api/pastes').then(r => r.json()).then(pastes => {
+        cachedPastes = pastes;
         const box = document.getElementById('pasteListContainer');
         if (!pastes || !pastes.length) { box.innerHTML = '<span style="color:#666; font-size:0.7rem;">No pastes created.</span>'; return; }
         
         box.innerHTML = pastes.map(p => `
-          <div style="background:rgba(5,8,15,0.8); border:1px solid #ffaa00; padding:4px 8px; border-radius:3px; margin-top:3px; display:flex; justify-content:space-between; align-items:center;">
+          <div style="background:rgba(5,8,15,0.8); border:1px solid #ffaa00; padding:6px 8px; border-radius:3px; margin-top:4px; display:flex; justify-content:space-between; align-items:center;">
             <div>
-              <a href="/raw/${p.slug}" target="_blank" style="color:#ffaa00; font-weight:bold; text-decoration:none; font-size:0.7rem;">🔗 /raw/${p.slug}</a>
-              <span style="font-size:0.58rem; color:#888; margin-left:5px;">(${p.contentLength} chars)</span>
+              <a href="/raw/${p.slug}" target="_blank" style="color:#ffaa00; font-weight:bold; text-decoration:none; font-size:0.72rem;">🔗 /raw/${p.slug}</a>
+              <div style="font-size:0.6rem; color:#888;">Size: ${p.contentLength} chars | Updated: ${p.updatedAt || 'Recently'}</div>
             </div>
             <div>
+              <button class="btn btn-sm" style="background:#ffaa00; color:#000;" onclick="editPaste('${p.slug}')">✏️ EDIT</button>
               <button class="btn btn-sm" style="background:#00ffcc; color:#000;" onclick="copyRawUrl('${window.location.origin}/raw/${p.slug}')">COPY LINK</button>
               <button class="btn btn-sm btn-danger" onclick="deletePaste('${p.slug}')">DEL</button>
             </div>
@@ -365,13 +373,24 @@
       });
     }
 
+    function editPaste(slug) {
+      const found = cachedPastes.find(p => p.slug === slug);
+      if (found) {
+        document.getElementById('pasteSlug').value = found.slug;
+        document.getElementById('pasteContent').value = found.content;
+        window.location.hash = "pastebinSection";
+      }
+    }
+
     function copyRawUrl(url) {
       navigator.clipboard.writeText(url);
       alert("Raw URL Copied to Clipboard!");
     }
 
     function deletePaste(slug) {
-      fetch(`/api/pastes/${slug}`, { method: 'DELETE' }).then(() => loadPastesList());
+      if(confirm(`Are you sure you want to delete /raw/${slug}?`)) {
+        fetch(`/api/pastes/${slug}`, { method: 'DELETE' }).then(() => loadPastesList());
+      }
     }
 
     function loadCouponsList() {
