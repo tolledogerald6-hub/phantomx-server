@@ -23,8 +23,7 @@ const ADMIN_USER = process.env.ADMIN_USER || "RAGNARX_ADMIN";
 const ADMIN_PASS = process.env.ADMIN_PASS || "PhantomX_SecurePass_2026!";
 
 let activeSessions = new Set();
-
-// Chat & Training Group In-Memory Store
+let activeLoaderClients = new Map();
 let chatMessages = [];
 let trainingMessages = [];
 let trainingSeenUsers = new Set();
@@ -65,9 +64,11 @@ function loadDB() {
       keys: [], 
       resetRequests: [],
       logs: [],
+      coupons: [],
+      downloadCount: 0,
       maintenance: false, 
       loaderVersion: "1.0.0", 
-      discordWebhook: "",
+      discordWebhook: process.env.DISCORD_WEBHOOK || "",
       broadcastMsg: "PHANTOM X SYSTEM - ALL SYSTEMS OPERATIONAL.",
       gcashName: "RAGNAR X",
       gcashNumber: "09XX-XXX-XXXX"
@@ -77,6 +78,8 @@ function loadDB() {
   }
   const data = JSON.parse(fs.readFileSync(dbFile));
   if (!data.resetRequests) data.resetRequests = [];
+  if (!data.coupons) data.coupons = [];
+  if (data.downloadCount === undefined) data.downloadCount = 0;
   return data;
 }
 
@@ -84,26 +87,33 @@ function saveDB(data) {
   fs.writeFileSync(dbFile, JSON.stringify(data, null, 2));
 }
 
-function addSystemLog(msg) {
+function sendDiscordAlert(msg) {
+  const db = loadDB();
+  const webhookUrl = db.discordWebhook || process.env.DISCORD_WEBHOOK;
+  if (!webhookUrl) return;
+
+  try {
+    const url = new URL(webhookUrl);
+    const payload = JSON.stringify({ content: msg });
+    const req = https.request(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': payload.length }
+    });
+    req.write(payload);
+    req.end();
+  } catch(e) {}
+}
+
+function addSystemLog(msg, req = null) {
   const db = loadDB();
   if (!db.logs) db.logs = [];
-  const logEntry = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  const ip = req ? (req.ip || req.connection.remoteAddress || 'IP:Internal') : 'IP:System';
+  const logEntry = `[${new Date().toLocaleTimeString()}] [${ip}] ${msg}`;
   db.logs.unshift(logEntry);
-  if (db.logs.length > 50) db.logs.pop();
+  if (db.logs.length > 60) db.logs.pop();
   saveDB(db);
 
-  if (db.discordWebhook) {
-    try {
-      const url = new URL(db.discordWebhook);
-      const payload = JSON.stringify({ content: `🤖 **[PHANTOM X LOG]** ${msg}` });
-      const req = https.request(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': payload.length }
-      });
-      req.write(payload);
-      req.end();
-    } catch(e) {}
-  }
+  sendDiscordAlert(`🤖 **[PHANTOM X LOG]** ${msg}`);
 }
 
 const storage = multer.diskStorage({
@@ -123,12 +133,66 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.use('/admin.html', restrictToLocalhost);
-
 app.use(express.static('public'));
-app.use('/files', express.static(uploadFolder));
 app.use('/slider-images', express.static(sliderFolder));
 app.use('/chat-files', express.static(chatUploadsFolder));
 app.use('/training-files', express.static(trainingUploadsFolder));
+
+app.get('/files/:filename', (req, res) => {
+  const filePath = path.join(uploadFolder, req.params.filename);
+  if (fs.existsSync(filePath)) {
+    const db = loadDB();
+    db.downloadCount = (db.downloadCount || 0) + 1;
+    saveDB(db);
+    addSystemLog(`Loader Executable Downloaded: ${req.params.filename}`, req);
+    res.download(filePath);
+  } else {
+    res.status(404).send("File Not Found");
+  }
+});
+
+// BULK KEY EXPORTER (.TXT)
+app.get('/api/export-keys-txt', (req, res) => {
+  const db = loadDB();
+  const activeKeys = db.keys.filter(k => k.status === 'ACTIVE');
+  
+  let txtContent = "==========================================\n";
+  txtContent += "      PHANTOM X - ACTIVE LICENSE KEYS     \n";
+  txtContent += "==========================================\n\n";
+
+  activeKeys.forEach((k, idx) => {
+    txtContent += `${idx + 1}. KEY: ${k.key} | CLIENT: ${k.clientName} | DURATION: ${k.duration} | EXPIRES: ${new Date(k.expiresAt).toLocaleString()}\n`;
+  });
+
+  res.setHeader('Content-disposition', 'attachment; filename=phantomx_active_keys.txt');
+  res.setHeader('Content-type', 'text/plain');
+  res.send(txtContent);
+});
+
+// SUBMIT GCASH TRANSACTION FOR DISCORD VERIFICATION
+app.post('/api/claim-key', (req, res) => {
+  const { gcashRef, duration } = req.body;
+  if (!gcashRef || gcashRef.trim().length < 6) {
+    return res.json({ success: false, message: "Please enter a valid GCash Reference Number!" });
+  }
+
+  const clientIp = req.ip || req.connection.remoteAddress || 'Unknown IP';
+  const alertMessage = 
+    `📩 **[NEW PAYMENT TRANSACTION SUBMITTED]**\n` +
+    `> 👤 **Client IP:** \`${clientIp}\`\n` +
+    `> 🧾 **GCash Ref No:** \`${gcashRef.trim()}\`\n` +
+    `> ⏳ **Plan Selected:** \`${duration || '1-Day'}\`\n` +
+    `> 🕒 **Time:** \`${new Date().toLocaleTimeString()}\`\n` +
+    `⚠️ *Please check your GCash App to verify payment before generating the key in Admin Panel.*`;
+
+  sendDiscordAlert(alertMessage);
+  addSystemLog(`GCash Payment Submitted for Verification: Ref [${gcashRef.trim()}]`, req);
+
+  res.json({ 
+    success: true, 
+    message: "Transaction details sent to Admin! Please message us on Discord with your GCash Reference Number to receive your VIP key." 
+  });
+});
 
 // AUTH API
 app.post('/api/login', restrictToLocalhost, (req, res) => {
@@ -138,10 +202,10 @@ app.post('/api/login', restrictToLocalhost, (req, res) => {
   if (user === ADMIN_USER && pass === ADMIN_PASS) {
     const token = crypto.randomBytes(32).toString('hex');
     activeSessions.add(token);
-    addSystemLog(`Admin Login Successful from ${req.ip}`);
+    addSystemLog(`Admin Login Successful`, req);
     res.json({ success: true, token });
   } else {
-    addSystemLog(`Failed Admin Login Attempt from ${req.ip}`);
+    addSystemLog(`Failed Admin Login Attempt`, req);
     res.status(401).json({ success: false, message: "Invalid credentials" });
   }
 });
@@ -154,19 +218,90 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/verify-session', (req, res) => {
   const token = req.headers['authorization'];
-  if (token && activeSessions.has(token)) {
-    res.json({ valid: true });
-  } else {
-    res.json({ valid: false });
-  }
+  if (token && activeSessions.has(token)) res.json({ valid: true });
+  else res.json({ valid: false });
 });
 
-// PRIVATE CHATBOX API
+// 24-HOUR EXPIRATION AUTO REMINDER
+setInterval(() => {
+  const db = loadDB();
+  const now = new Date().getTime();
+  db.keys.forEach(k => {
+    if (k.status === 'ACTIVE' && !k.reminderSent) {
+      const expTime = new Date(k.expiresAt).getTime();
+      const hoursLeft = (expTime - now) / (1000 * 60 * 60);
+      if (hoursLeft > 0 && hoursLeft <= 24) {
+        k.reminderSent = true;
+        saveDB(db);
+        sendDiscordAlert(`⚠️ **[24H RENEWAL ALERT]** Key \`${k.key}\` for Client **[${k.clientName}]** will expire in 24 hours!`);
+      }
+    }
+  });
+}, 300000);
+
+app.post('/api/heartbeat', (req, res) => {
+  const { key, hwid } = req.body;
+  if (key) activeLoaderClients.set(key, { hwid, lastPing: Date.now() });
+  res.json({ success: true });
+});
+
+setInterval(() => {
+  const now = Date.now();
+  for (let [key, data] of activeLoaderClients.entries()) {
+    if (now - data.lastPing > 60000) activeLoaderClients.delete(key);
+  }
+}, 10000);
+
+app.post('/api/report-crack-attempt', (req, res) => {
+  const { key, hwid, reason } = req.body;
+  const db = loadDB();
+  const foundKey = db.keys.find(k => k.key === (key || '').trim());
+
+  if (foundKey) {
+    foundKey.status = "BANNED";
+    saveDB(db);
+  }
+
+  addSystemLog(`🚨 [SECURITY BREACH] Key: ${key || 'UNKNOWN'} | HWID: ${hwid || 'UNKNOWN'} | REASON: ${reason || 'Debugger Attached'}`, req);
+  res.json({ success: true });
+});
+
+app.get('/api/coupons', (req, res) => res.json(loadDB().coupons || []));
+app.post('/api/coupons', (req, res) => {
+  const { code, discountPercent } = req.body;
+  const db = loadDB();
+  db.coupons.push({
+    id: Date.now(),
+    code: (code || '').toUpperCase().trim(),
+    discountPercent: parseInt(discountPercent) || 10,
+    createdAt: new Date().toLocaleDateString()
+  });
+  saveDB(db);
+  addSystemLog(`Created Coupon Code: ${code} (${discountPercent}% OFF)`, req);
+  res.json({ success: true });
+});
+
+app.delete('/api/coupons/:id', (req, res) => {
+  const db = loadDB();
+  db.coupons = db.coupons.filter(c => c.id !== parseInt(req.params.id));
+  saveDB(db);
+  res.json({ success: true });
+});
+
+app.post('/api/verify-coupon', (req, res) => {
+  const { code } = req.body;
+  const db = loadDB();
+  const found = db.coupons.find(c => c.code === (code || '').toUpperCase().trim());
+
+  if (found) res.json({ success: true, discountPercent: found.discountPercent });
+  else res.json({ success: false, message: "Invalid or expired coupon code." });
+});
+
+// CHAT & TRAINING APIS
 app.get('/api/chat/messages', (req, res) => res.json(chatMessages));
 app.post('/api/chat/send', upload.single('chatAttachment'), (req, res) => {
   const { sender, text } = req.body;
-  let fileUrl = null;
-  let fileType = null;
+  let fileUrl = null; let fileType = null;
 
   if (req.file) {
     fileUrl = `/chat-files/${req.file.filename}`;
@@ -175,35 +310,21 @@ app.post('/api/chat/send', upload.single('chatAttachment'), (req, res) => {
     else fileType = 'file';
   }
 
-  const msgObj = {
-    id: Date.now(),
-    sender: sender || 'VIP Guest',
-    text: text || '',
-    fileUrl,
-    fileType,
-    time: new Date().toLocaleTimeString()
-  };
-
+  const msgObj = { id: Date.now(), sender: sender || 'VIP Guest', text: text || '', fileUrl, fileType, time: new Date().toLocaleTimeString() };
   chatMessages.push(msgObj);
   if (chatMessages.length > 100) chatMessages.shift();
   res.json({ success: true, message: msgObj });
 });
 
-// ================= TRAINING GROUP MESSENGER API =================
 app.get('/api/training/messages', (req, res) => {
   const username = req.query.user || 'Guest';
   trainingSeenUsers.add(username);
-  
-  res.json({
-    messages: trainingMessages,
-    seenList: Array.from(trainingSeenUsers)
-  });
+  res.json({ messages: trainingMessages, seenList: Array.from(trainingSeenUsers) });
 });
 
 app.post('/api/training/send', upload.single('trainingAttachment'), (req, res) => {
   const { sender, text } = req.body;
-  let fileUrl = null;
-  let fileType = null;
+  let fileUrl = null; let fileType = null;
 
   if (req.file) {
     fileUrl = `/training-files/${req.file.filename}`;
@@ -212,49 +333,35 @@ app.post('/api/training/send', upload.single('trainingAttachment'), (req, res) =
     else fileType = 'file';
   }
 
-  const msgObj = {
-    id: Date.now(),
-    sender: sender || 'Trainee VIP',
-    text: text || '',
-    fileUrl,
-    fileType,
-    time: new Date().toLocaleTimeString()
-  };
-
+  const msgObj = { id: Date.now(), sender: sender || 'Trainee VIP', text: text || '', fileUrl, fileType, time: new Date().toLocaleTimeString() };
   trainingMessages.push(msgObj);
   if (trainingMessages.length > 200) trainingMessages.shift();
   res.json({ success: true, message: msgObj });
 });
 
-// DELETE SINGLE MESSAGE IN TRAINING
 app.delete('/api/training/messages/:id', (req, res) => {
-  const msgId = parseInt(req.params.id);
-  trainingMessages = trainingMessages.filter(m => m.id !== msgId);
+  trainingMessages = trainingMessages.filter(m => m.id !== parseInt(req.params.id));
   res.json({ success: true });
 });
 
-// CLEAR ALL MESSAGES IN TRAINING (DELETE ALL)
 app.post('/api/training/clear-all', (req, res) => {
   trainingMessages = [];
   trainingSeenUsers.clear();
-  addSystemLog("Training Group Chat Cleared by Admin/User.");
+  addSystemLog("Training Group Chat Cleared.", req);
   res.json({ success: true });
 });
 
-// WEBRTC SIGNALING
 app.post('/api/call/signal', (req, res) => {
   const { type, data } = req.body;
   if (type === 'offer') videoCallSignal.offer = data;
   else if (type === 'answer') videoCallSignal.answer = data;
   else if (type === 'candidate') videoCallSignal.candidates.push(data);
   else if (type === 'reset') videoCallSignal = { offer: null, answer: null, candidates: [] };
-  
   res.json({ success: true });
 });
 
 app.get('/api/call/signal', (req, res) => res.json(videoCallSignal));
 
-// SYSTEM & KEYS APIS
 app.get('/api/server-stats', (req, res) => {
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
@@ -269,7 +376,9 @@ app.get('/api/server-stats', (req, res) => {
     totalKeys: db.keys.length,
     activeKeys: db.keys.filter(k => k.status === 'ACTIVE').length,
     bannedKeys: db.keys.filter(k => k.status === 'BANNED').length,
-    pendingResets: db.resetRequests.filter(r => r.status === 'PENDING').length
+    pendingResets: db.resetRequests.filter(r => r.status === 'PENDING').length,
+    activeLoadersOnline: activeLoaderClients.size,
+    totalDownloads: db.downloadCount || 0
   });
 });
 
@@ -295,17 +404,17 @@ app.post('/api/settings', (req, res) => {
   if (req.body.gcashName !== undefined) db.gcashName = req.body.gcashName;
   if (req.body.gcashNumber !== undefined) db.gcashNumber = req.body.gcashNumber;
   saveDB(db);
-  addSystemLog("Settings Updated.");
+  addSystemLog("Settings Updated.", req);
   res.json({ success: true });
 });
 
 app.post('/upload-gcash', upload.single('gcashQr'), (req, res) => {
-  addSystemLog("GCash QR Code Image Updated.");
+  addSystemLog("GCash QR Code Image Updated.", req);
   res.redirect('/admin.html');
 });
 
 app.post('/upload-music', upload.single('bgMusic'), (req, res) => {
-  addSystemLog("Background Music MP3 Updated.");
+  addSystemLog("Background Music MP3 Updated.", req);
   res.redirect('/admin.html');
 });
 
@@ -313,13 +422,13 @@ app.post('/api/maintenance', (req, res) => {
   const db = loadDB();
   db.maintenance = req.body.maintenance;
   saveDB(db);
-  addSystemLog(db.maintenance ? "⚠️ MAINTENANCE ACTIVE" : "✅ MAINTENANCE DISABLED");
+  addSystemLog(db.maintenance ? "⚠️ MAINTENANCE ACTIVE" : "✅ MAINTENANCE DISABLED", req);
   res.json({ success: true, maintenance: db.maintenance });
 });
 
 app.get('/api/backup-db', (req, res) => res.download(dbFile, 'phantomx_database_backup.json'));
 app.post('/api/restore-db', upload.single('dbBackup'), (req, res) => {
-  addSystemLog("Database Restored.");
+  addSystemLog("Database Restored.", req);
   res.redirect('/admin.html');
 });
 
@@ -343,7 +452,7 @@ app.post('/api/request-hwid-reset', (req, res) => {
   });
 
   saveDB(db);
-  addSystemLog(`HWID Reset Requested by [${foundKey.clientName}]`);
+  addSystemLog(`HWID Reset Requested by [${foundKey.clientName}]`, req);
   res.json({ success: true, message: "Reset request submitted to Admin." });
 });
 
@@ -360,10 +469,10 @@ app.post('/api/process-hwid-reset', (req, res) => {
     reqObj.status = 'APPROVED';
     const targetKey = db.keys.find(k => k.key === reqObj.key);
     if (targetKey) targetKey.hwid = "UNBOUND";
-    addSystemLog(`Approved HWID Reset for [${reqObj.clientName}]`);
+    addSystemLog(`Approved HWID Reset for [${reqObj.clientName}]`, req);
   } else {
     reqObj.status = 'REJECTED';
-    addSystemLog(`Rejected HWID Reset for [${reqObj.clientName}]`);
+    addSystemLog(`Rejected HWID Reset for [${reqObj.clientName}]`, req);
   }
 
   saveDB(db);
@@ -372,13 +481,13 @@ app.post('/api/process-hwid-reset', (req, res) => {
 
 app.get('/api/sliders', (req, res) => fs.readdir(sliderFolder, (err, files) => res.json(files || [])));
 app.post('/upload-slider', upload.single('sliderImage'), (req, res) => {
-  addSystemLog(`Slider Image Uploaded: ${req.file.filename}`);
+  addSystemLog(`Slider Image Uploaded: ${req.file.filename}`, req);
   res.redirect('/admin.html');
 });
 app.delete('/api/sliders/:name', (req, res) => {
   const p = path.join(sliderFolder, req.params.name);
   if (fs.existsSync(p)) fs.unlinkSync(p);
-  addSystemLog(`Slider Deleted: ${req.params.name}`);
+  addSystemLog(`Slider Deleted: ${req.params.name}`, req);
   res.json({ success: true });
 });
 
@@ -397,14 +506,14 @@ app.get('/api/files', (req, res) => {
 });
 
 app.post('/upload', upload.single('file'), (req, res) => {
-  addSystemLog(`Loader File Uploaded: ${req.file.originalname}`);
+  addSystemLog(`Loader File Uploaded: ${req.file.originalname}`, req);
   res.redirect('/admin.html');
 });
 
 app.delete('/api/files/:name', (req, res) => {
   const p = path.join(uploadFolder, req.params.name);
   if (fs.existsSync(p)) fs.unlinkSync(p);
-  addSystemLog(`File Deleted: ${req.params.name}`);
+  addSystemLog(`File Deleted: ${req.params.name}`, req);
   res.json({ success: true });
 });
 
@@ -422,6 +531,7 @@ app.post('/api/check-key-status', (req, res) => {
     key: foundKey.key,
     status: isExpired ? "EXPIRED" : foundKey.status,
     hwidStatus: foundKey.hwid === "UNBOUND" ? "UNBOUND" : "LOCKED TO PC",
+    expiresAtISO: foundKey.expiresAt,
     expiresAt: new Date(foundKey.expiresAt).toLocaleString()
   });
 });
@@ -462,7 +572,7 @@ app.post('/api/generate-key', (req, res) => {
   }
 
   saveDB(db);
-  addSystemLog(`Generated ${count} key(s) for [${clientName}]`);
+  addSystemLog(`Generated ${count} key(s) for [${clientName}]`, req);
   res.json(generatedList);
 });
 
@@ -479,7 +589,7 @@ app.get('/api/keys', (req, res) => {
 app.post('/api/keys/reset-hwid', (req, res) => {
   const db = loadDB();
   const k = db.keys.find(item => item.id === req.body.id);
-  if (k) { k.hwid = "UNBOUND"; saveDB(db); addSystemLog(`HWID Reset: ${k.key}`); res.json({ success: true }); }
+  if (k) { k.hwid = "UNBOUND"; saveDB(db); addSystemLog(`HWID Reset: ${k.key}`, req); res.json({ success: true }); }
   else res.status(404).json({ success: false });
 });
 
@@ -489,7 +599,7 @@ app.post('/api/keys/toggle-ban', (req, res) => {
   if (k) { 
     k.status = (k.status === "BANNED") ? "ACTIVE" : "BANNED"; 
     saveDB(db); 
-    addSystemLog(`Key status: [${k.status}] -> ${k.key}`);
+    addSystemLog(`Key status: [${k.status}] -> ${k.key}`, req);
     res.json({ success: true, status: k.status }); 
   } else res.status(404).json({ success: false });
 });
@@ -499,7 +609,7 @@ app.delete('/api/keys/:id', (req, res) => {
   const targetKey = db.keys.find(k => k.id === parseInt(req.params.id));
   db.keys = db.keys.filter(k => k.id !== parseInt(req.params.id));
   saveDB(db);
-  if (targetKey) addSystemLog(`Key Deleted: ${targetKey.key}`);
+  if (targetKey) addSystemLog(`Key Deleted: ${targetKey.key}`, req);
   res.json({ success: true });
 });
 
@@ -526,7 +636,7 @@ app.post('/api/validate-key', (req, res) => {
   if (foundKey.hwid === "UNBOUND") {
     foundKey.hwid = userHwid;
     saveDB(db);
-    addSystemLog(`HWID bound [${foundKey.clientName}]: ${userHwid}`);
+    addSystemLog(`HWID bound [${foundKey.clientName}]: ${userHwid}`, req);
     return res.json({ success: true, message: `Welcome ${foundKey.clientName}!` });
   } else if (foundKey.hwid === userHwid) {
     return res.json({ success: true, message: `Welcome ${foundKey.clientName}!` });
