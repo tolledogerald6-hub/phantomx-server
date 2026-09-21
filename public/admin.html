@@ -2,445 +2,562 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-  <title>PHANTOM X - Enterprise Suite</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PHANTOM X - Central Core</title>
   <style>
-    :root { --bg: #030508; --card-bg: rgba(10, 14, 22, 0.95); --accent: #00ffcc; --danger: #ff0055; --text: #e0e6ed; }
+    :root { 
+      --bg: #030508; 
+      --card-bg: rgba(10, 15, 25, 0.9); 
+      --accent: #00ffcc; 
+      --danger: #ff0055; 
+      --text: #e0e6ed; 
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Consolas', monospace; }
-    body { background: var(--bg); color: var(--text); padding: 8px; width: 100vw; min-height: 100vh; overflow-x: hidden; display: flex; flex-direction: column; justify-content: space-between; }
-    .full-wrapper { width: 100%; max-width: 1100px; margin: 0 auto; }
     
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #1a233a; padding-bottom: 6px; }
-    .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; margin-bottom: 8px; }
-    .stat-card { background: var(--card-bg); border: 1px solid #1a233a; padding: 6px 8px; border-radius: 3px; border-left: 3px solid var(--accent); }
-    .stat-card span { font-size: 0.65rem; color: #888; display: block; }
-    .stat-card strong { font-size: 0.95rem; color: #fff; }
-
-    .main-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
-    .card { background: var(--card-bg); border: 1px solid #1a233a; border-radius: 3px; padding: 8px; margin-bottom: 8px; }
-    .card h5 { color: var(--accent); margin-bottom: 4px; font-size: 0.8rem; }
+    body { 
+      background-color: var(--bg); 
+      color: var(--text); 
+      padding: 20px 15px; 
+      min-height: 100vh; 
+      display: flex; 
+      flex-direction: column; 
+      justify-content: space-between; 
+      position: relative;
+    }
+    #matrixCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.12; }
     
-    input, select { width: 100%; padding: 5px 7px; background: #070a10; border: 1px solid #1f2942; color: #fff; margin-bottom: 4px; border-radius: 2px; font-size: 0.75rem; }
-    .btn { background: var(--accent); color: #000; padding: 5px 8px; font-weight: bold; border: none; cursor: pointer; border-radius: 2px; font-size: 0.7rem; text-transform: uppercase; }
-    .btn-danger { background: var(--danger); color: #fff; }
-    .btn-sm { padding: 2px 5px; font-size: 0.65rem; margin-left: 2px; }
+    .container { 
+      max-width: 1100px; 
+      margin: 0 auto; 
+      width: 100%; 
+      display: flex;
+      flex-direction: column;
+      gap: 16px; 
+    }
 
-    .log-box { background: #020305; border: 1px solid #1a233a; border-radius: 2px; padding: 6px; font-size: 0.7rem; height: 110px; overflow-y: auto; color: var(--accent); }
+    #maintenanceOverlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(3, 5, 8, 0.97);
+      z-index: 99999;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      border: 4px solid var(--danger);
+      box-shadow: inset 0 0 50px rgba(255, 0, 85, 0.5);
+    }
+
+    .broadcast-bar { 
+      background: rgba(0, 255, 204, 0.08); 
+      border: 1px solid var(--accent); 
+      border-radius: 6px; 
+      padding: 10px 15px; 
+      font-size: 0.8rem; 
+      color: var(--accent); 
+      display: flex; 
+      align-items: center; 
+      gap: 10px; 
+    }
+    .ticker { font-weight: bold; animation: pulse 1.5s infinite alternate; }
+    @keyframes pulse { from { opacity: 0.4; } to { opacity: 1; } }
+
+    .nav-bar { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      background: var(--card-bg); 
+      border: 1px solid rgba(0, 255, 204, 0.2); 
+      padding: 12px 18px; 
+      border-radius: 6px; 
+    }
+    .logo { font-size: 1.5rem; font-weight: 900; color: #fff; letter-spacing: 1px; }
+    .logo span { color: var(--accent); }
     
-    table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-    th, td { padding: 4px 6px; text-align: left; border-bottom: 1px solid #1a233a; font-size: 0.7rem; }
-    th { color: var(--accent); background: #070a10; }
-    .badge { padding: 2px 4px; border-radius: 2px; font-weight: bold; font-size: 0.6rem; }
-    .badge-active { background: rgba(0, 255, 204, 0.15); color: var(--accent); }
-    .badge-banned { background: rgba(255, 0, 85, 0.15); color: var(--danger); }
-    #adminPanel { display: none; }
+    .btn-discord { background: #5865F2; color: #fff; padding: 6px 14px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 0.75rem; }
+    .btn-chat { background: #ffaa00; color: #000; padding: 6px 14px; border-radius: 4px; border:none; cursor:pointer; font-weight: bold; font-size: 0.75rem; }
+    .btn-training { background: var(--accent); color: #000; padding: 6px 14px; border-radius: 4px; border:none; cursor:pointer; font-weight: bold; font-size: 0.75rem; }
+    .admin-btn { background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 6px 14px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 0.75rem; }
 
-    /* FOOTER PAREHAS NA PAREHAS SA INDEX HOMEPAGE */
-    footer { border-top: 1px solid #1a233a; padding-top: 15px; text-align: center; font-size: 0.75rem; color: #666; margin-top: 10px; width: 100%; }
+    .music-card { 
+      background: rgba(5, 10, 20, 0.95); 
+      border: 1px solid #ff0055; 
+      border-radius: 6px; 
+      padding: 10px 16px; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      box-shadow: 0 0 10px rgba(255, 0, 85, 0.15);
+    }
+
+    .slider-wrapper { 
+      width: 100%; 
+      height: 220px; 
+      position: relative; 
+      overflow: hidden; 
+      border-radius: 6px; 
+      border: 1px solid #1a233a; 
+      background: #000; 
+    }
+    .slide-track { display: flex; width: 100%; height: 100%; transition: transform 0.6s ease-in-out; }
+    .slide-img { min-width: 100%; height: 100%; object-fit: cover; }
+    .slider-dots { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+    .dot { width: 8px; height: 8px; background: rgba(255,255,255,0.4); border-radius: 50%; cursor: pointer; }
+    .dot.active { background: var(--accent); }
+
+    .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+    .card { background: var(--card-bg); border: 1px solid #1a233a; border-radius: 6px; padding: 14px; }
+    .card h5 { color: var(--accent); margin-bottom: 8px; font-size: 0.8rem; }
+    
+    input { width: 100%; padding: 8px 10px; background: #070a10; border: 1px solid #1f2942; color: #fff; border-radius: 4px; font-size: 0.75rem; margin-bottom: 8px; }
+    .btn { background: var(--accent); color: #000; padding: 7px 12px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 0.75rem; border: none; cursor: pointer; }
+    .file-item { background: rgba(5, 8, 15, 0.9); border: 1px solid #192238; padding: 8px 12px; border-radius: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+
+    .gcash-box { text-align: center; border: 1px solid #007dfe; background: rgba(0, 125, 254, 0.08); }
+    .gcash-qr-img { width: 110px; height: 110px; object-fit: contain; border: 2px solid #007dfe; border-radius: 4px; background: #fff; margin: 4px auto; display: block; }
+    .feat-tag { display: inline-block; background: rgba(0, 255, 204, 0.1); border: 1px solid var(--accent); color: var(--accent); font-size: 0.65rem; padding: 3px 8px; border-radius: 3px; margin: 3px; }
+
+    /* CHATBOX MODAL STYLING */
+    #chatModal, #trainingModal {
+      position: fixed; bottom: 20px; right: 20px; width: 360px; height: 500px;
+      background: rgba(5, 10, 20, 0.98); border: 1px solid var(--accent); border-radius: 8px;
+      display: none; flex-direction: column; z-index: 9999; box-shadow: 0 0 20px rgba(0,255,204,0.2);
+    }
+    .chat-header { background: #070e1c; padding: 10px; border-bottom: 1px solid #1a233a; display: flex; justify-content: space-between; align-items: center; }
+    .chat-body { flex: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; font-size: 0.75rem; }
+    
+    .chat-msg { background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; position: relative; max-width: 90%; }
+    .chat-msg.admin { background: rgba(0,255,204,0.15); align-self: flex-end; border:1px solid var(--accent); }
+    .del-btn { position: absolute; top: 4px; right: 6px; background: none; border: none; color: var(--danger); cursor: pointer; font-size: 0.75rem; }
+
+    .chat-footer { padding: 8px; border-top: 1px solid #1a233a; display: flex; flex-direction: column; gap: 4px; }
+
+    /* VIDEO CALL OVERLAY */
+    #videoModal {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.9); z-index: 100000; display: none;
+      flex-direction: column; justify-content: center; align-items: center;
+    }
+    .video-grid { display: flex; gap: 10px; margin-bottom: 15px; }
+    video { width: 320px; height: 240px; background: #000; border: 2px solid var(--accent); border-radius: 6px; }
+
+    footer { border-top: 1px solid #1a233a; padding-top: 15px; text-align: center; font-size: 0.75rem; color: #666; margin-top: 10px; }
     footer strong { color: var(--accent); }
     footer a { color: #5865F2; text-decoration: none; font-weight: bold; }
   </style>
 </head>
 <body>
 
-  <div class="full-wrapper">
-    <div class="header">
-      <h4 style="color:#fff;">PHANTOM X <span style="color:var(--danger);">ENTERPRISE DASHBOARD</span></h4>
-      <!-- KAPAG CLINICK ANG HOMEPAGE O NAG-BACK, MAG-LOGOUT SEYA AUTOMATIC -->
-      <a href="/" onclick="logoutSession()" style="color:#888; text-decoration:none; font-size:0.75rem;">← Main Homepage</a>
+  <div id="maintenanceOverlay">
+    <h1 style="color:var(--danger); font-size:2.5rem; margin-bottom:10px;">⚠️ SYSTEM UNDER MAINTENANCE</h1>
+    <p style="color:#fff; font-size:1.1rem; max-width:600px;">PHANTOM X Core Engine is currently undergoing scheduled updates.</p>
+    <p style="color:var(--accent); margin-top:15px; font-size:0.9rem;">Join Discord for status updates: <strong>discord.gg/kYmuhCSxaF</strong></p>
+  </div>
+
+  <canvas id="matrixCanvas"></canvas>
+
+  <div class="container">
+    <div class="broadcast-bar">
+      <span class="ticker">📢 ANNOUNCEMENT:</span>
+      <span id="broadcastText">Loading broadcast...</span>
     </div>
 
-    <!-- AUTHENTICATION CONTAINER (LOCAL PC SECURED) -->
-    <div class="card" id="loginCard" style="max-width: 320px; margin: 50px auto; border-color: var(--danger);">
-      <h5 style="color:var(--danger); text-align:center; font-size:0.9rem;">🔒 LOCAL ADMIN AUTHENTICATION</h5>
-      <p style="font-size:0.65rem; color:#888; text-align:center; margin-bottom:10px;">Access restricted to Localhost system.</p>
-      
-      <input type="password" id="user" placeholder="ADMIN IDENTIFIER" autocomplete="off">
-      <input type="password" id="pass" placeholder="SECURITY KEYCODE" autocomplete="off">
-      <button class="btn" style="width:100%; background:var(--danger); color:#fff; margin-top:4px;" onclick="login()">AUTHORIZE ACCESS</button>
-      <div id="loginMsg" style="color:var(--danger); font-size:0.7rem; text-align:center; margin-top:6px;"></div>
+    <div class="nav-bar">
+      <div class="logo">PHANTOM <span>X</span></div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:0.75rem; color:var(--accent);" id="serverMetrics">RAM: --% | Uptime: --s</span>
+        <button class="btn-training" onclick="toggleTraining()">🎮 TRAINING HUB</button>
+        <button class="btn-chat" onclick="toggleChat()">💬 CHAT</button>
+        <a href="https://discord.gg/kYmuhCSxaF" target="_blank" class="btn-discord">DISCORD</a>
+        <a href="/admin.html" class="admin-btn">🔑 ADMIN</a>
+      </div>
     </div>
 
-    <div id="adminPanel">
-      <div class="stats-bar">
-        <div class="stat-card"><span>SERVER RAM</span><strong id="statRAM">--%</strong></div>
-        <div class="stat-card"><span>TOTAL KEYS</span><strong id="statTotalKeys">0</strong></div>
-        <div class="stat-card"><span>ACTIVE KEYS</span><strong id="statActiveKeys" style="color:var(--accent);">0</strong></div>
-        <div class="stat-card"><span>BANNED KEYS</span><strong id="statBannedKeys" style="color:var(--danger);">0</strong></div>
-        <div class="stat-card"><span>PENDING RESETS</span><strong id="statPendingResets" style="color:#ffaa00;">0</strong></div>
+    <!-- BACKGROUND AUDIO PLAYER -->
+    <div class="music-card">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:1.1rem;">🎵</span>
+        <div>
+          <div style="font-size:0.75rem; font-weight:bold; color:#ff0055;">BACKGROUND AUDIO SYSTEM</div>
+          <div style="font-size:0.65rem; color:#aaa;" id="audioStatus">Click anywhere on page to start sound</div>
+        </div>
+      </div>
+      <div>
+        <audio id="bgAudio" loop controls style="height:30px; max-width:240px;">
+          <source src="/files/background-music.mp3" type="audio/mpeg">
+        </audio>
+      </div>
+    </div>
+
+    <!-- Banner Slider -->
+    <div class="slider-wrapper">
+      <div class="slide-track" id="slideTrack">
+        <img src="/files/homepage-banner.png" class="slide-img" onerror="this.src='https://placehold.co/900x220/0a0f19/00ffcc?text=PHANTOM+X+SYSTEM'" alt="Banner">
+      </div>
+      <div class="slider-dots" id="sliderDots"></div>
+    </div>
+
+    <!-- 4 Main Cards -->
+    <div class="grid-4">
+      <div class="card gcash-box">
+        <h5 style="color:#007dfe; margin-bottom:4px; font-size:0.75rem;">💙 GCASH DIRECT PAYMENT</h5>
+        <img src="/files/gcash-qr.png" onerror="this.src='https://placehold.co/110x110/007dfe/ffffff?text=SCAN+QR'" class="gcash-qr-img" alt="GCash QR">
+        <div style="font-size:0.7rem; color:#fff; font-weight:bold; margin-top:4px;" id="gcashNameDisplay">NAME: RagnarX</div>
+        <div style="font-size:0.7rem; color:#00ffcc;" id="gcashNumDisplay">NO: 09XX-XXX-XXXX</div>
       </div>
 
-      <div class="main-grid">
-        <!-- LEFT COLUMN -->
+      <div class="card">
+        <h5 style="color:var(--accent); margin-bottom:6px; font-size:0.75rem;">🔎 VIP KEY CHECKER</h5>
+        <input type="text" id="checkKeyInput" placeholder="Enter License Key...">
+        <button class="btn" style="width:100%;" onclick="checkKeyStatus()">CHECK EXPIRATION</button>
+        <div id="keyCheckResult" style="margin-top:6px; font-size:0.7rem; color:#aaa;"></div>
+      </div>
+
+      <div class="card">
+        <h5 style="color:var(--danger); margin-bottom:6px; font-size:0.75rem;">🔄 REQUEST HWID RESET</h5>
+        <input type="text" id="reqKeyInput" placeholder="PX License Key">
+        <input type="text" id="reqReasonInput" placeholder="Reason (e.g. PC Format)">
+        <button class="btn" style="width:100%; background:var(--danger); color:#fff;" onclick="submitResetReq()">SUBMIT REQUEST</button>
+        <div id="resetReqResult" style="margin-top:6px; font-size:0.7rem; color:#aaa;"></div>
+      </div>
+
+      <div class="card">
+        <h5 style="color:#5865F2; margin-bottom:6px; font-size:0.75rem;">💬 DISCORD COMMUNITY</h5>
+        <p style="font-size:0.7rem; color:#aaa; margin-bottom:8px;">Send GCash receipt to Discord for instant key release.</p>
+        <a href="https://discord.gg/kYmuhCSxaF" target="_blank" class="btn" style="background:#5865F2; color:#fff; display:block; text-align:center; text-decoration:none;">JOIN DISCORD SERVER</a>
+      </div>
+    </div>
+
+    <!-- VIP Features Badges -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+      <div class="card">
+        <h5 style="color:var(--accent); margin-bottom:8px; font-size:0.75rem;">⚡ SF RUSH VIP FEATURES PACK</h5>
         <div>
-          <div class="card">
-            <h5>🔑 BATCH VIP KEY GENERATOR</h5>
-            <div style="display: flex; gap: 6px;">
-              <input type="text" id="clientName" placeholder="CLIENT / PREFIX" style="margin:0;">
-              <select id="keyDuration" style="margin:0; width: 25%;">
-                <option value="1-Day">1 Day</option>
-                <option value="7-Days">7 Days</option>
-                <option value="30-Days">30 Days</option>
-              </select>
-              <input type="number" id="keyAmount" value="1" min="1" max="20" placeholder="Qty" style="margin:0; width: 15%;">
-              <button class="btn" style="width:25%;" onclick="generateLicense()">GENERATE</button>
-            </div>
-          </div>
-
-          <div class="card">
-            <h5 style="color:#00ffcc;">⚡ QUICK RESELLER DISPENSER</h5>
-            <div style="display:flex; gap:6px;">
-              <button class="btn" style="width:33%; background:rgba(0,255,204,0.1); border:1px solid #00ffcc; color:#00ffcc;" onclick="quickGen('1-Day')">+ 1 DAY KEY</button>
-              <button class="btn" style="width:33%; background:rgba(255,170,0,0.1); border:1px solid #ffaa00; color:#ffaa00;" onclick="quickGen('7-Days')">+ 7 DAYS KEY</button>
-              <button class="btn" style="width:34%; background:rgba(255,0,85,0.1); border:1px solid #ff0055; color:#ff0055;" onclick="quickGen('30-Days')">+ 30 DAYS KEY</button>
-            </div>
-          </div>
-
-          <div class="card">
-            <h5 style="color:var(--danger);">🔄 HWID RESET APPROVAL QUEUE</h5>
-            <table>
-              <thead>
-                <tr><th>USER</th><th>KEY</th><th>REASON</th><th>STATUS</th><th>ACTIONS</th></tr>
-              </thead>
-              <tbody id="resetReqTableBody"><tr><td colspan="5" style="color:#666;">No pending requests.</td></tr></tbody>
-            </table>
-          </div>
-
-          <div class="card">
-            <h5 style="color:var(--accent);">🎮 SPECIAL FORCE RUSH LOADER FILE MANAGER</h5>
-            <form action="/upload" method="POST" enctype="multipart/form-data" style="display:flex; gap:6px; margin-bottom:8px;">
-              <input type="file" name="file" required style="margin:0;">
-              <button type="submit" class="btn" style="background:var(--accent); width:120px;">UPLOAD SF LOADER</button>
-            </form>
-            <div id="fileList">Scanning loader files...</div>
-          </div>
-
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-              <h5>📑 LICENSE DATABASE MANAGER</h5>
-              <input type="text" id="searchFilter" onkeyup="filterKeys()" placeholder="🔍 Search..." style="margin:0; width:160px; padding:3px;">
-            </div>
-            <table>
-              <thead>
-                <tr><th>CLIENT</th><th>KEY</th><th>STATUS</th><th>HWID</th><th>EXPIRES</th><th>ACTIONS</th></tr>
-              </thead>
-              <tbody id="keyTableBody"><tr><td colspan="6" style="color:#666;">No keys found.</td></tr></tbody>
-            </table>
-          </div>
+          <span class="feat-tag">🎯 AIMBOT (LOCK)</span>
+          <span class="feat-tag">🧱 WALLHACK</span>
+          <span class="feat-tag">👁️ ESP SYSTEM</span>
+          <span class="feat-tag">⚡ EXP BOOST</span>
+          <span class="feat-tag">➕ CROSSHAIR</span>
+          <span class="feat-tag">🧍 BIGBODY MODE</span>
+          <span class="feat-tag" style="border-color:#ffaa00; color:#ffaa00;">🛡️ BYPASS UNDETECTED</span>
         </div>
+      </div>
 
-        <!-- RIGHT COLUMN -->
-        <div>
-          <div class="card">
-            <h5 style="color:#ff0055;">🎵 BACKGROUND MUSIC MP3 MANAGER</h5>
-            <form action="/upload-music" method="POST" enctype="multipart/form-data" style="display:flex; gap:4px;">
-              <input type="file" name="bgMusic" accept="audio/mp3,audio/*" required style="margin:0;">
-              <button type="submit" class="btn" style="background:#ff0055; color:#fff; width:100px;">UPLOAD MP3</button>
-            </form>
-          </div>
-
-          <div class="card">
-            <h5 style="color:#00ffcc;">🖼️ HOMEPAGE SLIDER MANAGER</h5>
-            <form action="/upload-slider" method="POST" enctype="multipart/form-data" style="display:flex; gap:4px; margin-bottom:8px;">
-              <input type="file" name="sliderImage" accept="image/*" required style="margin:0;">
-              <button type="submit" class="btn" style="background:#00ffcc; color:#000; width:90px;">UPLOAD</button>
-            </form>
-            <div id="adminSliderList" style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">Loading sliders...</div>
-          </div>
-
-          <div class="card">
-            <h5 style="color:#007dfe;">💙 GCASH QR & PAYMENT DETAILS</h5>
-            <form action="/upload-gcash" method="POST" enctype="multipart/form-data" style="display:flex; gap:4px; margin-bottom:4px;">
-              <input type="file" name="gcashQr" accept="image/*" required style="margin:0;">
-              <button type="submit" class="btn" style="background:#007dfe; color:#fff; width:100px;">UPLOAD QR</button>
-            </form>
-            <input type="text" id="gcashNameInput" placeholder="GCash Account Name">
-            <input type="text" id="gcashNumInput" placeholder="GCash Account No.">
-            <button class="btn" style="width:100%; background:#007dfe; color:#fff;" onclick="saveSettings()">SAVE GCASH DETAILS</button>
-          </div>
-
-          <div class="card">
-            <h5>🛠️ MAINTENANCE SYSTEM</h5>
-            <button class="btn" id="maintBtn" style="width:100%;" onclick="toggleMaintenance()">TOGGLE MAINTENANCE</button>
-          </div>
-
-          <div class="card">
-            <h5>💾 BACKUP & RESTORE DB</h5>
-            <div style="display:flex; gap:4px;">
-              <a href="/api/backup-db" class="btn" style="background:#fff; text-align:center; width:50%; text-decoration:none; padding:5px 0;">BACKUP JSON</a>
-              <form action="/api/restore-db" method="POST" enctype="multipart/form-data" style="width:50%;">
-                <input type="file" name="dbBackup" accept=".json" required style="display:none;" id="dbFileInput" onchange="this.form.submit()">
-                <button type="button" class="btn" style="background:var(--accent); width:100%;" onclick="document.getElementById('dbFileInput').click()">RESTORE</button>
-              </form>
-            </div>
-          </div>
-
-          <div class="card">
-            <h5>📢 BROADCAST & DISCORD WEBHOOK</h5>
-            <input type="text" id="broadcastInput" placeholder="Announcement text">
-            <input type="text" id="versionInput" placeholder="Version (1.0.0)">
-            <input type="text" id="webhookInput" placeholder="Discord Webhook URL">
-            <button class="btn" style="width:100%; background:#7289da; color:#fff;" onclick="saveSettings()">SAVE CONFIG</button>
-          </div>
-
-          <div class="card">
-            <h5>📋 SYSTEM AUDIT LOG</h5>
-            <div class="log-box" id="auditLogBox">Loading...</div>
-          </div>
+      <div class="card">
+        <h5 style="color:#00ffcc; margin-bottom:6px; font-size:0.75rem;">💻 OS & SYSTEM COMPATIBILITY</h5>
+        <div style="font-size:0.7rem; color:#aaa; line-height:1.6;">
+          ✔ Windows 10 & Windows 11 Full Support<br>
+          ✔ Intel / AMD Processors Compatible<br>
+          <span style="color:var(--accent);">● Protection Status: Kernel-Level Active Bypass</span>
         </div>
+      </div>
+    </div>
+
+    <!-- SPECIAL FORCE RUSH LOADER FILE DOWNLOADS ONLY -->
+    <div class="card" id="publicView">
+      <h5 style="color:var(--accent); margin-bottom:8px; font-size:0.8rem;">🎮 SPECIAL FORCE RUSH LOADER REPOSITORY</h5>
+      <div id="fileContainer">Scanning...</div>
+    </div>
+
+    <footer>
+      <p>DEVELOPED BY: <strong>RagnarX</strong> | PHANTOM X ENGINE v1.0 | <span style="color:var(--accent);">NODE: PH-MANILA-01</span></p>
+      <p style="margin-top:4px;">OFFICIAL DISCORD: <a href="https://discord.gg/kYmuhCSxaF" target="_blank">discord.gg/kYmuhCSxaF</a></p>
+    </footer>
+  </div>
+
+  <!-- PRIVATE CHATBOX MODAL -->
+  <div id="chatModal">
+    <div class="chat-header">
+      <span style="color:var(--accent); font-weight:bold; font-size:0.8rem;">💬 VIP PRIVATE CHAT</span>
+      <div>
+        <button class="btn" style="background:#00ffcc; padding:2px 6px; font-size:0.65rem;" onclick="startVideoCall()">📹 CALL</button>
+        <button style="background:none; border:none; color:#fff; cursor:pointer;" onclick="toggleChat()">✖</button>
+      </div>
+    </div>
+    <div class="chat-body" id="chatMessagesBox"></div>
+    <div class="chat-footer">
+      <input type="text" id="chatInputMsg" placeholder="Type message..." style="margin:0;">
+      <div style="display:flex; gap:4px;">
+        <input type="file" id="chatFileInput" style="font-size:0.65rem; margin:0;">
+        <button class="btn" style="width:70px;" onclick="sendChatMessage()">SEND</button>
       </div>
     </div>
   </div>
 
-  <!-- EXACT MATCH FOOTER FROM INDEX.HTML (NAKA-CENTER) -->
-  <footer>
-    <p>DEVELOPED BY: <strong>RagnarX</strong> | PHANTOM X ENGINE v1.0 | <span style="color:var(--accent);">NODE: PH-MANILA-01</span></p>
-    <p style="margin-top:4px;">OFFICIAL DISCORD: <a href="https://discord.gg/kYmuhCSxaF" target="_blank">discord.gg/kYmuhCSxaF</a></p>
-  </footer>
+  <!-- TRAINING GROUP MESSENGER HUB MODAL -->
+  <div id="trainingModal" style="width: 420px; height: 550px;">
+    <div class="chat-header">
+      <div>
+        <span style="color:var(--accent); font-weight:bold; font-size:0.85rem;">🎮 TRAINING & COACHING GROUP</span>
+        <div style="font-size:0.6rem; color:#aaa;" id="trainingSeenList">Seen by: None</div>
+      </div>
+      <div style="display:flex; gap:4px; align-items:center;">
+        <button class="btn" style="background:#00ffcc; padding:2px 6px; font-size:0.65rem;" onclick="startVideoCall()">📹 CALL</button>
+        <button class="btn" style="background:var(--danger); color:#fff; padding:2px 6px; font-size:0.65rem;" onclick="clearAllTrainingMsgs()">🗑️ CLEAR ALL</button>
+        <button style="background:none; border:none; color:#fff; cursor:pointer; font-size:0.9rem;" onclick="toggleTraining()">✖</button>
+      </div>
+    </div>
+
+    <div class="chat-body" id="trainingMessagesBox"></div>
+
+    <div class="chat-footer">
+      <input type="text" id="trainingUserSender" placeholder="Your Name / Alias (e.g. RagnarX)" style="margin-bottom:4px;">
+      <input type="text" id="trainingInputMsg" placeholder="Ask question / Share training tip..." style="margin:0;">
+      <div style="display:flex; gap:4px; margin-top:4px;">
+        <input type="file" id="trainingFileInput" accept="image/*,video/*,.pdf,.doc" style="font-size:0.65rem; margin:0;">
+        <button class="btn" style="width:80px;" onclick="sendTrainingMessage()">SEND</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIDEO CALL OVERLAY -->
+  <div id="videoModal">
+    <h3 style="color:var(--accent); margin-bottom:10px;">📹 PHANTOM X VIP ENCRYPTED VIDEO CALL</h3>
+    <div class="video-grid">
+      <div>
+        <span style="font-size:0.7rem; color:#aaa;">YOUR CAMERA</span><br>
+        <video id="localVideo" autoplay playsinline muted></video>
+      </div>
+      <div>
+        <span style="font-size:0.7rem; color:var(--accent);">REMOTE CAMERA</span><br>
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+    </div>
+    <button class="btn" style="background:var(--danger); color:#fff;" onclick="endVideoCall()">END CALL</button>
+  </div>
 
   <script>
-    let currentMaintStatus = false;
-    let allKeysData = [];
-
-    // CHECK SESSION ON PAGE LOAD & ON BROWSER BACK BUTTON
-    window.addEventListener('pageshow', function(event) {
-      const token = sessionStorage.getItem('adminToken');
-      if (!token) {
-        showLogin();
-      } else {
-        fetch('/api/verify-session', {
-          headers: { 'Authorization': token }
-        }).then(r => r.json()).then(res => {
-          if (res.valid) {
-            document.getElementById('loginCard').style.display = 'none';
-            document.getElementById('adminPanel').style.display = 'block';
-            initAdminData();
-          } else {
-            logoutSession();
-          }
-        });
-      }
-    });
-
-    function showLogin() {
-      document.getElementById('loginCard').style.display = 'block';
-      document.getElementById('adminPanel').style.display = 'none';
-    }
-
-    function logoutSession() {
-      const token = sessionStorage.getItem('adminToken');
-      if(token) {
-        fetch('/api/logout', { method: 'POST', headers: { 'Authorization': token } });
-      }
-      sessionStorage.removeItem('adminToken');
-      showLogin();
-    }
-
-    function login() {
-      const username = document.getElementById('user').value.trim();
-      const password = document.getElementById('pass').value.trim();
-      
-      fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      }).then(res => res.json()).then(d => {
-        if(d.success) {
-          sessionStorage.setItem('adminToken', d.token);
-          document.getElementById('user').value = '';
-          document.getElementById('pass').value = '';
-          document.getElementById('loginCard').style.display = 'none';
-          document.getElementById('adminPanel').style.display = 'block';
-          initAdminData();
-        } else {
-          document.getElementById('loginMsg').innerText = 'Access Denied: Invalid Credentials!';
-        }
-      }).catch(err => {
-        document.getElementById('loginMsg').innerText = 'Connection Error / Access Restricted.';
+    const canvas = document.getElementById('matrixCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    const chars = '01ABCDEFGHIJKLMNOPQRSTUVWXYZPX$%#@';
+    const drops = Array(Math.floor(canvas.width / 12)).fill(1);
+    function drawMatrix() {
+      ctx.fillStyle = 'rgba(3, 5, 8, 0.08)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#00ffcc'; ctx.font = '12px monospace';
+      drops.forEach((y, i) => {
+        ctx.fillText(chars.charAt(Math.floor(Math.random() * chars.length)), i * 12, y * 12);
+        if (y * 12 > canvas.height && Math.random() > 0.975) drops[i] = 0;
+        drops[i]++;
       });
     }
+    setInterval(drawMatrix, 35);
 
-    function initAdminData() {
-      fetch('/api/settings').then(r => r.json()).then(d => {
-        currentMaintStatus = d.maintenance;
-        document.getElementById('versionInput').value = d.version;
-        document.getElementById('webhookInput').value = d.webhook || '';
-        document.getElementById('broadcastInput').value = d.broadcast || '';
-        document.getElementById('gcashNameInput').value = d.gcashName || '';
-        document.getElementById('gcashNumInput').value = d.gcashNumber || '';
-        updateMaintBtnUI();
-      });
-
-      setInterval(updateStatsAndLogs, 2000);
-      updateStatsAndLogs();
-
-      loadKeysTable();
-      loadResetRequests();
-      loadSlidersList();
-      loadLoaderFiles();
+    const audio = document.getElementById('bgAudio');
+    function startAudioOnInteraction() {
+      audio.play().then(() => {
+        document.getElementById('audioStatus').innerText = "Playing Background Sound Engine";
+        document.removeEventListener('click', startAudioOnInteraction);
+      }).catch(e => {});
     }
+    document.addEventListener('click', startAudioOnInteraction);
 
-    function updateStatsAndLogs() {
-      fetch('/api/server-stats').then(r=>r.json()).then(s => {
-        document.getElementById('statRAM').innerText = `${s.memoryPercent}% (${s.freeMemMB}MB)`;
-        document.getElementById('statTotalKeys').innerText = s.totalKeys;
-        document.getElementById('statActiveKeys').innerText = s.activeKeys;
-        document.getElementById('statBannedKeys').innerText = s.bannedKeys || 0;
-        document.getElementById('statPendingResets').innerText = s.pendingResets;
-      });
-
-      fetch('/api/logs').then(r=>r.json()).then(logs => {
-        document.getElementById('auditLogBox').innerHTML = logs.map(l => `<div style="margin-bottom:2px;">${l}</div>`).join('');
-      });
-    }
-
-    function loadSlidersList() {
+    let currentSlide = 0; let totalSlides = 0;
+    function initSlider() {
       fetch('/api/sliders').then(r => r.json()).then(images => {
-        const container = document.getElementById('adminSliderList');
-        if(!images.length) { container.innerHTML = '<span style="color:#666; font-size:0.7rem;">No slider images.</span>'; return; }
-        container.innerHTML = images.map(img => `
-          <div style="border:1px solid #1a233a; padding:4px; border-radius:3px; text-align:center; background:#000;">
-            <img src="/slider-images/${img}" style="width:100%; height:50px; object-fit:cover; border-radius:2px;">
-            <button class="btn btn-sm btn-danger" style="margin-top:3px; width:100%;" onclick="deleteSlider('${img}')">DELETE</button>
-          </div>
-        `).join('');
+        const track = document.getElementById('slideTrack');
+        const dots = document.getElementById('sliderDots');
+        if (images.length > 0) {
+          track.innerHTML = images.map(img => `<img src="/slider-images/${img}" class="slide-img">`).join('');
+          dots.innerHTML = images.map((_, i) => `<div class="dot ${i===0?'active':''}" onclick="goToSlide(${i})"></div>`).join('');
+          totalSlides = images.length;
+        } else totalSlides = 1;
+      });
+    }
+    function goToSlide(i) {
+      currentSlide = i;
+      document.getElementById('slideTrack').style.transform = `translateX(-${currentSlide * 100}%)`;
+      document.querySelectorAll('.dot').forEach((d, idx) => d.classList.toggle('active', idx === currentSlide));
+    }
+    setInterval(() => { if (totalSlides > 1) { currentSlide = (currentSlide + 1) % totalSlides; goToSlide(currentSlide); } }, 4000);
+    initSlider();
+
+    // CHAT SYSTEM LOGIC
+    function toggleChat() {
+      const m = document.getElementById('chatModal');
+      m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
+      if(m.style.display === 'flex') loadChatMessages();
+    }
+
+    function loadChatMessages() {
+      fetch('/api/chat/messages').then(r => r.json()).then(msgs => {
+        const box = document.getElementById('chatMessagesBox');
+        box.innerHTML = msgs.map(m => {
+          let media = '';
+          if(m.fileType === 'image') media = `<br><img src="${m.fileUrl}" style="max-width:100%; border-radius:4px; margin-top:4px;">`;
+          else if(m.fileType === 'video') media = `<br><video src="${m.fileUrl}" controls style="max-width:100%; border-radius:4px; margin-top:4px;"></video>`;
+          else if(m.fileType === 'file') media = `<br><a href="${m.fileUrl}" target="_blank" style="color:var(--accent);">📄 Attachment</a>`;
+          return `<div class="chat-msg ${m.sender === 'ADMIN' ? 'admin' : ''}"><strong>${m.sender}:</strong> ${m.text}${media}<div style="font-size:0.55rem; color:#888;">${m.time}</div></div>`;
+        }).join('');
+        box.scrollTop = box.scrollHeight;
       });
     }
 
-    function deleteSlider(filename) {
-      fetch(`/api/sliders/${filename}`, { method: 'DELETE' }).then(() => loadSlidersList());
-    }
+    function sendChatMessage() {
+      const text = document.getElementById('chatInputMsg').value.trim();
+      const fileInput = document.getElementById('chatFileInput');
+      const formData = new FormData();
+      formData.append('sender', 'VIP Client');
+      formData.append('text', text);
+      if(fileInput.files[0]) formData.append('chatAttachment', fileInput.files[0]);
 
-    function loadLoaderFiles() {
-      fetch('/api/files').then(r => r.json()).then(files => {
-        const container = document.getElementById('fileList');
-        if(!files.length) { container.innerHTML = '<span style="color:#666; font-size:0.7rem;">No SF Rush loaders uploaded.</span>'; return; }
-        container.innerHTML = files.map(file => `
-          <div style="background:rgba(5,8,15,0.8); border:1px solid #1f2942; padding:4px 8px; border-radius:3px; margin-top:3px; display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:0.7rem; color:#fff;">🎮 ${file}</span>
-            <button class="btn btn-sm btn-danger" onclick="deleteFile('${file}')">DEL</button>
-          </div>
-        `).join('');
+      fetch('/api/chat/send', { method: 'POST', body: formData }).then(() => {
+        document.getElementById('chatInputMsg').value = '';
+        fileInput.value = '';
+        loadChatMessages();
       });
     }
 
-    function deleteFile(filename) {
-      fetch(`/api/files/${filename}`, { method: 'DELETE' }).then(() => loadLoaderFiles());
+    // ================= TRAINING MESSENGER GROUP SYSTEM =================
+    function toggleTraining() {
+      const m = document.getElementById('trainingModal');
+      m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
+      if(m.style.display === 'flex') loadTrainingMessages();
     }
 
-    function saveSettings() {
-      const version = document.getElementById('versionInput').value.trim();
-      const webhook = document.getElementById('webhookInput').value.trim();
-      const broadcast = document.getElementById('broadcastInput').value.trim();
-      const gcashName = document.getElementById('gcashNameInput').value.trim();
-      const gcashNumber = document.getElementById('gcashNumInput').value.trim();
+    function loadTrainingMessages() {
+      const myUser = document.getElementById('trainingUserSender').value.trim() || 'Trainee VIP';
+      fetch(`/api/training/messages?user=${encodeURIComponent(myUser)}`).then(r => r.json()).then(d => {
+        const box = document.getElementById('trainingMessagesBox');
+        document.getElementById('trainingSeenList').innerText = `👁️ Seen by: ${d.seenList.join(', ')}`;
 
-      fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version, webhook, broadcast, gcashName, gcashNumber })
-      }).then(() => alert('Config Saved!'));
+        box.innerHTML = d.messages.map(m => {
+          let media = '';
+          if(m.fileType === 'image') media = `<br><img src="${m.fileUrl}" style="max-width:100%; border-radius:4px; margin-top:4px;">`;
+          else if(m.fileType === 'video') media = `<br><video src="${m.fileUrl}" controls style="max-width:100%; border-radius:4px; margin-top:4px;"></video>`;
+          else if(m.fileType === 'file') media = `<br><a href="${m.fileUrl}" target="_blank" style="color:var(--accent);">📄 Attachment</a>`;
+          
+          return `
+            <div class="chat-msg">
+              <button class="del-btn" onclick="deleteSingleTrainingMsg(${m.id})">🗑️</button>
+              <strong style="color:var(--accent);">${m.sender}:</strong> ${m.text}${media}
+              <div style="font-size:0.55rem; color:#888; margin-top:2px;">${m.time}</div>
+            </div>
+          `;
+        }).join('');
+        box.scrollTop = box.scrollHeight;
+      });
     }
+    setInterval(() => {
+      if(document.getElementById('trainingModal').style.display === 'flex') loadTrainingMessages();
+    }, 2000);
 
-    function toggleMaintenance() {
-      currentMaintStatus = !currentMaintStatus;
-      fetch('/api/maintenance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maintenance: currentMaintStatus })
-      }).then(() => updateMaintBtnUI());
-    }
+    function sendTrainingMessage() {
+      const text = document.getElementById('trainingInputMsg').value.trim();
+      const sender = document.getElementById('trainingUserSender').value.trim() || 'Trainee VIP';
+      const fileInput = document.getElementById('trainingFileInput');
+      const formData = new FormData();
+      formData.append('sender', sender);
+      formData.append('text', text);
+      if(fileInput.files[0]) formData.append('trainingAttachment', fileInput.files[0]);
 
-    function updateMaintBtnUI() {
-      const btn = document.getElementById('maintBtn');
-      btn.innerText = currentMaintStatus ? "MAINTENANCE: ACTIVE" : "MAINTENANCE: OFF";
-      btn.style.background = currentMaintStatus ? "var(--danger)" : "var(--accent)";
-      btn.style.color = currentMaintStatus ? "#fff" : "#000";
-    }
-
-    function loadResetRequests() {
-      fetch('/api/reset-requests').then(r => r.json()).then(reqs => {
-        const tbody = document.getElementById('resetReqTableBody');
-        const pending = reqs.filter(r => r.status === 'PENDING');
-        if(!pending.length) { tbody.innerHTML = '<tr><td colspan="5" style="color:#666;">No pending requests.</td></tr>'; return; }
-        tbody.innerHTML = pending.map(r => `
-          <tr>
-            <td style="color:#fff;">${r.clientName}</td>
-            <td style="color:var(--accent);">${r.key}</td>
-            <td style="font-size:0.65rem;">${r.reason}</td>
-            <td><span class="badge badge-banned">${r.status}</span></td>
-            <td>
-              <button class="btn btn-sm" onclick="processReset(${r.id}, 'APPROVE')">APPROVE</button>
-              <button class="btn btn-sm btn-danger" onclick="processReset(${r.id}, 'REJECT')">REJECT</button>
-            </td>
-          </tr>
-        `).join('');
+      fetch('/api/training/send', { method: 'POST', body: formData }).then(() => {
+        document.getElementById('trainingInputMsg').value = '';
+        fileInput.value = '';
+        loadTrainingMessages();
       });
     }
 
-    function processReset(id, action) {
-      fetch('/api/process-hwid-reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action })
-      }).then(() => { loadResetRequests(); loadKeysTable(); });
+    function deleteSingleTrainingMsg(id) {
+      fetch(`/api/training/messages/${id}`, { method: 'DELETE' }).then(() => loadTrainingMessages());
     }
 
-    function generateLicense() {
-      const clientName = document.getElementById('clientName').value.trim();
-      const duration = document.getElementById('keyDuration').value;
-      const amount = document.getElementById('keyAmount').value;
-
-      if(!clientName) return alert('Enter Client Name or Prefix!');
-
-      fetch('/api/generate-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientName, duration, amount })
-      }).then(() => { document.getElementById('clientName').value = ''; loadKeysTable(); });
+    function clearAllTrainingMsgs() {
+      if(confirm("Are you sure you want to delete ALL group training messages?")) {
+        fetch('/api/training/clear-all', { method: 'POST' }).then(() => loadTrainingMessages());
+      }
     }
 
-    function quickGen(duration) {
-      fetch('/api/generate-key', {
+    // WEBRTC VIDEO CALL SYSTEM LOGIC
+    let localStream, peerConnection;
+    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    async function startVideoCall() {
+      document.getElementById('videoModal').style.display = 'flex';
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      document.getElementById('localVideo').srcObject = localStream;
+
+      peerConnection = new RTCPeerConnection(config);
+      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+      peerConnection.ontrack = e => {
+        document.getElementById('remoteVideo').srcObject = e.streams[0];
+      };
+
+      peerConnection.onicecandidate = e => {
+        if(e.candidate) {
+          fetch('/api/call/signal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'candidate', data: e.candidate })
+          });
+        }
+      };
+
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      fetch('/api/call/signal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientName: "QuickSale", duration, amount: 1 })
-      }).then(() => loadKeysTable());
-    }
-
-    function loadKeysTable() {
-      fetch('/api/keys').then(r => r.json()).then(keys => {
-        allKeysData = keys;
-        renderKeysTable(keys);
+        body: JSON.stringify({ type: 'offer', data: offer })
       });
     }
 
-    function renderKeysTable(keys) {
-      const tbody = document.getElementById('keyTableBody');
-      if(!keys.length) { tbody.innerHTML = '<tr><td colspan="6" style="color:#666;">No keys found.</td></tr>'; return; }
-      tbody.innerHTML = keys.map(k => `
-        <tr>
-          <td style="color:#fff; font-weight:bold;">👤 ${k.clientName}</td>
-          <td style="color:var(--accent);">${k.key}</td>
-          <td><span class="badge ${k.status === 'BANNED' ? 'badge-banned' : 'badge-active'}">${k.status}</span></td>
-          <td>${k.hwid === 'UNBOUND' ? 'UNBOUND' : 'BOUND'}</td>
-          <td style="font-size:0.65rem; color:#aaa;">${new Date(k.expiresAt).toLocaleDateString()}</td>
-          <td>
-            <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${k.key}'); alert('Copied!');">COPY</button>
-            <button class="btn btn-sm" style="background:#ffaa00;" onclick="fetch('/api/keys/reset-hwid',{method:'POST',headers:{'Content-Type Aller': 'application/json'},body:JSON.stringify({id:${k.id}})}).then(()=>loadKeysTable())">RESET</button>
-            <button class="btn btn-sm" style="background:${k.status === 'BANNED' ? '#00ffcc' : '#ff0055'}; color:#000;" onclick="fetch('/api/keys/toggle-ban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:${k.id}})}).then(()=>loadKeysTable())">${k.status === 'BANNED' ? 'UNBAN' : 'BAN'}</button>
-            <button class="btn btn-sm btn-danger" onclick="fetch('/api/keys/${k.id}',{method:'DELETE'}).then(()=>loadKeysTable())">DEL</button>
-          </td>
-        </tr>
-      `).join('');
+    function endVideoCall() {
+      document.getElementById('videoModal').style.display = 'none';
+      if(localStream) localStream.getTracks().forEach(track => track.stop());
+      if(peerConnection) peerConnection.close();
+      fetch('/api/call/signal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'reset' }) });
     }
 
-    function filterKeys() {
-      const query = document.getElementById('searchFilter').value.toLowerCase();
-      renderKeysTable(allKeysData.filter(k => k.clientName.toLowerCase().includes(query) || k.key.toLowerCase().includes(query)));
+    function checkKeyStatus() {
+      const key = document.getElementById('checkKeyInput').value.trim();
+      fetch('/api/check-key-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key })
+      }).then(r => r.json()).then(d => {
+        const res = document.getElementById('keyCheckResult');
+        if (d.success) {
+          res.innerHTML = `<span style="color:#00ffcc;">USER: ${d.clientName}</span><br>STATUS: <strong>${d.status}</strong> (${d.hwidStatus})<br>EXPIRES: ${d.expiresAt}`;
+        } else res.innerHTML = `<span style="color:var(--danger);">${d.message}</span>`;
+      });
     }
+
+    function submitResetReq() {
+      const key = document.getElementById('reqKeyInput').value.trim();
+      const reason = document.getElementById('reqReasonInput').value.trim();
+      fetch('/api/request-hwid-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, reason })
+      }).then(r => r.json()).then(d => {
+        document.getElementById('resetReqResult').innerText = d.message;
+      });
+    }
+
+    setInterval(() => {
+      fetch('/api/server-stats').then(r=>r.json()).then(d => {
+        document.getElementById('serverMetrics').innerText = `RAM: ${d.memoryPercent}% | Uptime: ${d.uptimeSeconds}s`;
+      });
+
+      fetch('/api/settings').then(r=>r.json()).then(d => {
+        document.getElementById('broadcastText').innerText = d.broadcast || "All Systems Operational.";
+        document.getElementById('gcashNameDisplay').innerText = `NAME: ${d.gcashName}`;
+        document.getElementById('gcashNumDisplay').innerText = `NO: ${d.gcashNumber}`;
+
+        const overlay = document.getElementById('maintenanceOverlay');
+        if (d.maintenance) overlay.style.display = 'flex';
+        else overlay.style.display = 'none';
+      });
+    }, 1500);
+
+    fetch('/api/files').then(r=>r.json()).then(files => {
+      const c = document.getElementById('fileContainer');
+      if (!files.length) { c.innerHTML = '<p style="color:#666; font-size:0.75rem;">No Special Force Rush loaders compiled.</p>'; return; }
+      c.innerHTML = files.map(f => `<div class="file-item"><span style="font-size:0.75rem; color:#fff;">🎮 ${f}</span><a href="/files/${f}" target="_blank" class="btn">DOWNLOAD LOADER</a></div>`).join('');
+    });
   </script>
 </body>
 </html>
