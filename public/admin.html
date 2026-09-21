@@ -79,17 +79,23 @@
         <div>
           <!-- PASTEBIN / RAW STORAGE CARD -->
           <div class="card" id="pastebinSection" style="border:1px solid #ffaa00;">
-            <h5 style="color:#ffaa00;">📋 DYNAMIC PHANTOM PASTEBIN (EDITABLE PERMANENT LINK)</h5>
-            <p style="font-size:0.65rem; color:#aaa; margin-bottom:5px;">Isang permanenteng URL lang na pwedeng palit-palitan ang nilalaman anytime nang hindi nagbabago ang link.</p>
-            <input type="text" id="pasteSlug" placeholder="Custom URL Name (e.g. ultra-pass, version-check, announcement)">
-            <textarea id="pasteContent" rows="7" placeholder="I-paste dito ang bagong Password, Code, JSON, o Text (NO CHARACTER LIMIT)..."></textarea>
-            <div style="display:flex; gap:4px;">
-              <button class="btn" style="background:#ffaa00; color:#000; width:70%;" onclick="savePaste()">💾 SAVE / UPDATE PASTE</button>
-              <button class="btn" style="background:#333; color:#fff; width:30%;" onclick="clearPasteForm()">CLEAR</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <h5 style="color:#ffaa00; margin:0;">📋 DYNAMIC PHANTOM PASTEBIN</h5>
+              <span id="pasteModeBadge" class="badge" style="background:#00ffcc; color:#000;">MODE: NEW PASTE</span>
+            </div>
+            <p style="font-size:0.65rem; color:#aaa; margin-bottom:5px;">Gumawa ng bagong paste key o pumili ng umiiral na paste sa ibaba para i-edit.</p>
+            
+            <input type="text" id="pasteSlug" placeholder="Custom Key Name / Slug (hal. version, ultra-pass, announcement)">
+            <textarea id="pasteContent" rows="7" placeholder="I-paste dito ang Bagong Content, Version Text, Password, o JSON..."></textarea>
+
+            <div style="display:flex; gap:4px; margin-top:4px;">
+              <button class="btn" style="background:#ffaa00; color:#000; width:50%;" onclick="savePaste()">💾 SAVE PASTE</button>
+              <button class="btn" style="background:#00ffcc; color:#000; width:30%;" onclick="startNewPaste()">➕ ADD NEW</button>
+              <button class="btn" style="background:#333; color:#fff; width:20%;" onclick="clearPasteForm()">CLEAR</button>
             </div>
 
             <div style="margin-top:10px;">
-              <h6 style="color:var(--accent); font-size:0.7rem; margin-bottom:4px;">ACTIVE PERMANENT LINKS:</h6>
+              <h6 style="color:var(--accent); font-size:0.7rem; margin-bottom:4px;">EXISTING PASTE KEYS:</h6>
               <div id="pasteListContainer">Loading pastes...</div>
             </div>
           </div>
@@ -328,15 +334,26 @@
     }
 
     /* EDITABLE PASTEBIN SYSTEM FUNCTIONS */
-    function clearPasteForm() {
+    function startNewPaste() {
       document.getElementById('pasteSlug').value = '';
       document.getElementById('pasteContent').value = '';
+      document.getElementById('pasteSlug').disabled = false;
+      
+      const badge = document.getElementById('pasteModeBadge');
+      badge.innerText = 'MODE: NEW PASTE';
+      badge.style.background = '#00ffcc';
+      badge.style.color = '#000';
+    }
+
+    function clearPasteForm() {
+      startNewPaste();
     }
 
     function savePaste() {
       const slug = document.getElementById('pasteSlug').value.trim();
       const content = document.getElementById('pasteContent').value;
 
+      if (!slug) return alert("Lagyan ng Key Name / Slug (halimbawa: version, ultra-pass, announcement)!");
       if (!content) return alert("Content cannot be empty!");
 
       fetch('/api/pastes', {
@@ -346,6 +363,7 @@
       }).then(r => r.json()).then(d => {
         if (d.success) {
           alert(`Paste Saved Successfully!\nRaw Link: ${window.location.origin}/raw/${d.slug}`);
+          startNewPaste();
           loadPastesList();
         }
       });
@@ -378,6 +396,12 @@
       if (found) {
         document.getElementById('pasteSlug').value = found.slug;
         document.getElementById('pasteContent').value = found.content;
+        
+        const badge = document.getElementById('pasteModeBadge');
+        badge.innerText = `EDITING: /raw/${found.slug}`;
+        badge.style.background = '#ffaa00';
+        badge.style.color = '#000';
+
         window.location.hash = "pastebinSection";
       }
     }
@@ -389,7 +413,10 @@
 
     function deletePaste(slug) {
       if(confirm(`Are you sure you want to delete /raw/${slug}?`)) {
-        fetch(`/api/pastes/${slug}`, { method: 'DELETE' }).then(() => loadPastesList());
+        fetch(`/api/pastes/${slug}`, { method: 'DELETE' }).then(() => {
+          startNewPaste();
+          loadPastesList();
+        });
       }
     }
 
