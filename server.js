@@ -29,8 +29,8 @@ let trainingMessages = [];
 let trainingSeenUsers = new Set();
 let videoCallSignal = { offer: null, answer: null, candidates: [] };
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const uploadFolder = path.join(__dirname, 'uploads');
 const sliderFolder = path.join(__dirname, 'uploads', 'slider');
@@ -50,6 +50,7 @@ function loadDB() {
       resetRequests: [],
       logs: [],
       coupons: [],
+      pastes: [],
       downloadCount: 0,
       maintenance: false, 
       loaderVersion: "1.0.0", 
@@ -64,6 +65,7 @@ function loadDB() {
   const data = JSON.parse(fs.readFileSync(dbFile));
   if (!data.resetRequests) data.resetRequests = [];
   if (!data.coupons) data.coupons = [];
+  if (!data.pastes) data.pastes = [];
   if (data.downloadCount === undefined) data.downloadCount = 0;
   return data;
 }
@@ -117,11 +119,61 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// SERVE PUBLIC FILES AND ADMIN PANEL DIRECTLY
 app.use(express.static('public'));
 app.use('/slider-images', express.static(sliderFolder));
 app.use('/chat-files', express.static(chatUploadsFolder));
 app.use('/training-files', express.static(trainingUploadsFolder));
+
+// 🚀 PHANTOM PASTEBIN RAW DIRECT LINK ENDPOINT
+app.get('/raw/:slug', (req, res) => {
+  const db = loadDB();
+  const targetSlug = req.params.slug.trim().toLowerCase();
+  const foundPaste = (db.pastes || []).find(p => p.slug.toLowerCase() === targetSlug);
+
+  if (foundPaste) {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(foundPaste.content);
+  } else {
+    res.status(404).send("PASTE NOT FOUND");
+  }
+});
+
+// PASTEBIN MANAGEMENT APIs
+app.get('/api/pastes', (req, res) => res.json(loadDB().pastes || []));
+
+app.post('/api/pastes', (req, res) => {
+  const { slug, content } = req.body;
+  const db = loadDB();
+  if (!db.pastes) db.pastes = [];
+
+  const pasteSlug = (slug || Date.now().toString()).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  const existingIdx = db.pastes.findIndex(p => p.slug === pasteSlug);
+
+  const pasteObj = {
+    slug: pasteSlug,
+    content: content || '',
+    contentLength: (content || '').length,
+    updatedAt: new Date().toLocaleString()
+  };
+
+  if (existingIdx !== -1) {
+    db.pastes[existingIdx] = pasteObj;
+  } else {
+    db.pastes.push(pasteObj);
+  }
+
+  saveDB(db);
+  addSystemLog(`Phantom Pastebin Created/Updated: [/raw/${pasteSlug}]`, req);
+  res.json({ success: true, slug: pasteSlug });
+});
+
+app.delete('/api/pastes/:slug', (req, res) => {
+  const db = loadDB();
+  db.pastes = (db.pastes || []).filter(p => p.slug !== req.params.slug);
+  saveDB(db);
+  addSystemLog(`Phantom Paste Deleted: [/raw/${req.params.slug}]`, req);
+  res.json({ success: true });
+});
 
 app.get('/files/:filename', (req, res) => {
   const filePath = path.join(uploadFolder, req.params.filename);
@@ -136,7 +188,6 @@ app.get('/files/:filename', (req, res) => {
   }
 });
 
-// EXPORT KEYS (.TXT)
 app.get('/api/export-keys-txt', (req, res) => {
   const db = loadDB();
   const activeKeys = db.keys.filter(k => k.status === 'ACTIVE');
@@ -154,7 +205,6 @@ app.get('/api/export-keys-txt', (req, res) => {
   res.send(txtContent);
 });
 
-// SUBMIT TRANSACTION TO DISCORD
 app.post('/api/claim-key', (req, res) => {
   const { gcashRef, duration } = req.body;
   if (!gcashRef || gcashRef.trim().length < 6) {
@@ -179,7 +229,6 @@ app.post('/api/claim-key', (req, res) => {
   });
 });
 
-// AUTHENTICATION APIs
 app.post('/api/login', (req, res) => {
   const user = (req.body.username || '').trim();
   const pass = (req.body.password || '').trim();
@@ -207,7 +256,6 @@ app.get('/api/verify-session', (req, res) => {
   else res.json({ valid: false });
 });
 
-// EXPIRATION SCANNER
 setInterval(() => {
   const db = loadDB();
   const now = new Date().getTime();
@@ -283,7 +331,6 @@ app.post('/api/verify-coupon', (req, res) => {
   else res.json({ success: false, message: "Invalid or expired coupon code." });
 });
 
-// CHATBOX & TRAINING MESSENGER APIs
 app.get('/api/chat/messages', (req, res) => res.json(chatMessages));
 app.post('/api/chat/send', upload.single('chatAttachment'), (req, res) => {
   const { sender, text } = req.body;
@@ -601,7 +648,6 @@ app.delete('/api/keys/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// ROBUST C++ VALIDATION ENDPOINT
 app.post('/api/validate-key', (req, res) => {
   const { key, userHwid, clientVersion } = req.body;
   const db = loadDB();
