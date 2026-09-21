@@ -50,17 +50,65 @@ function loadDB() {
       resetRequests: [],
       logs: [],
       coupons: [],
-      // 📌 PERMANENT DEFAULT PASTES (Hindi mabubura kahit mag-restart ang server)
+      // 📌 PERMANENT DEFAULT PASTES (Naka-hardcode sa Git repo kaya hinding-hindi mabubura sa Render!)
       pastes: [
         {
+          slug: "keyauth",
+          content: "KEY-VIP-001\nKEY-VIP-002\nKEY-ADMIN-999",
+          contentLength: 35,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "rawdata",
+          content: "RAW_CONFIG_DATA_HERE",
+          contentLength: 20,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "maintenance",
+          content: "OFF",
+          contentLength: 3,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "autoupdateversion",
+          content: "2.0.0",
+          contentLength: 5,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "ultrapassword",
+          content: "PHANTOMX_ADMIN_SECRET_KEY",
+          contentLength: 25,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
           slug: "version",
+          content: "2.0.0",
+          contentLength: 5,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "v1version",
           content: "1.0.0",
           contentLength: 5,
           updatedAt: new Date().toLocaleString()
         },
         {
-          slug: "ultra-pass",
-          content: "PhantomPass2026",
+          slug: "menuhacks",
+          content: "VISUAL=UNLOCKED\nPLAYER=UNLOCKED\nESP=UNLOCKED\nAIMBOT=UNLOCKED\nWEAPON=LOCKED\nITEMS=UNLOCKED\nHOST=LOCKED\nMISC=UNLOCKED",
+          contentLength: 120,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "hwidcheck",
+          content: "HWID-12345-ABCDE\nHWID-67890-FGHIJ",
+          contentLength: 33,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "ipblock",
+          content: "1.2.3.4\n5.6.7.8",
           contentLength: 15,
           updatedAt: new Date().toLocaleString()
         }
@@ -83,6 +131,7 @@ function loadDB() {
   if (data.downloadCount === undefined) data.downloadCount = 0;
   return data;
 }
+
 
 function saveDB(data) {
   fs.writeFileSync(dbFile, JSON.stringify(data, null, 2));
