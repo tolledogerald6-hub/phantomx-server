@@ -6,7 +6,6 @@ const https = require('https');
 const os = require('os');
 const crypto = require('crypto');
 
-// Kumuha ng environment variables kung may .env file
 if (fs.existsSync(path.join(__dirname, '.env'))) {
   const envConfig = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
   envConfig.split('\n').forEach(line => {
@@ -18,27 +17,34 @@ if (fs.existsSync(path.join(__dirname, '.env'))) {
 }
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const ADMIN_USER = process.env.ADMIN_USER || "RAGNARX_ADMIN";
 const ADMIN_PASS = process.env.ADMIN_PASS || "PhantomX_SecurePass_2026!";
 
-// Active Admin Session Tokens Store
 let activeSessions = new Set();
+
+// Chat & Training Group In-Memory Store
+let chatMessages = [];
+let trainingMessages = [];
+let trainingSeenUsers = new Set();
+let videoCallSignal = { offer: null, answer: null, candidates: [] };
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const uploadFolder = path.join(__dirname, 'uploads');
 const sliderFolder = path.join(__dirname, 'uploads', 'slider');
+const chatUploadsFolder = path.join(__dirname, 'uploads', 'chat');
+const trainingUploadsFolder = path.join(__dirname, 'uploads', 'training');
 const dbFile = path.join(__dirname, 'database.json');
 
 if (!fs.existsSync(uploadFolder)) fs.mkdirSync(uploadFolder);
 if (!fs.existsSync(sliderFolder)) fs.mkdirSync(sliderFolder);
+if (!fs.existsSync(chatUploadsFolder)) fs.mkdirSync(chatUploadsFolder, { recursive: true });
+if (!fs.existsSync(trainingUploadsFolder)) fs.mkdirSync(trainingUploadsFolder, { recursive: true });
 
-// MIDDLEWARE: Restrict Admin Access to Localhost & Disable Browser Caching (Anti-Back Button)
 function restrictToLocalhost(req, res, next) {
-  // Prevent browser caching so clicking BACK won't display sensitive admin view from memory
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
@@ -103,6 +109,8 @@ function addSystemLog(msg) {
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     if (file.fieldname === 'sliderImage') cb(null, sliderFolder);
+    else if (file.fieldname === 'chatAttachment') cb(null, chatUploadsFolder);
+    else if (file.fieldname === 'trainingAttachment') cb(null, trainingUploadsFolder);
     else cb(null, uploadFolder);
   },
   filename: (req, file, cb) => {
@@ -114,14 +122,15 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Anti-cache header setup for static files in admin
 app.use('/admin.html', restrictToLocalhost);
 
 app.use(express.static('public'));
 app.use('/files', express.static(uploadFolder));
 app.use('/slider-images', express.static(sliderFolder));
+app.use('/chat-files', express.static(chatUploadsFolder));
+app.use('/training-files', express.static(trainingUploadsFolder));
 
-// Auth Login API
+// AUTH API
 app.post('/api/login', restrictToLocalhost, (req, res) => {
   const user = (req.body.username || '').trim();
   const pass = (req.body.password || '').trim();
@@ -137,14 +146,12 @@ app.post('/api/login', restrictToLocalhost, (req, res) => {
   }
 });
 
-// Logout API
 app.post('/api/logout', (req, res) => {
   const token = req.headers['authorization'];
   if (token) activeSessions.delete(token);
   res.json({ success: true });
 });
 
-// Verify Session API (Used on Page Load)
 app.get('/api/verify-session', (req, res) => {
   const token = req.headers['authorization'];
   if (token && activeSessions.has(token)) {
@@ -154,6 +161,100 @@ app.get('/api/verify-session', (req, res) => {
   }
 });
 
+// PRIVATE CHATBOX API
+app.get('/api/chat/messages', (req, res) => res.json(chatMessages));
+app.post('/api/chat/send', upload.single('chatAttachment'), (req, res) => {
+  const { sender, text } = req.body;
+  let fileUrl = null;
+  let fileType = null;
+
+  if (req.file) {
+    fileUrl = `/chat-files/${req.file.filename}`;
+    if (req.file.mimetype.startsWith('image/')) fileType = 'image';
+    else if (req.file.mimetype.startsWith('video/')) fileType = 'video';
+    else fileType = 'file';
+  }
+
+  const msgObj = {
+    id: Date.now(),
+    sender: sender || 'VIP Guest',
+    text: text || '',
+    fileUrl,
+    fileType,
+    time: new Date().toLocaleTimeString()
+  };
+
+  chatMessages.push(msgObj);
+  if (chatMessages.length > 100) chatMessages.shift();
+  res.json({ success: true, message: msgObj });
+});
+
+// ================= TRAINING GROUP MESSENGER API =================
+app.get('/api/training/messages', (req, res) => {
+  const username = req.query.user || 'Guest';
+  trainingSeenUsers.add(username);
+  
+  res.json({
+    messages: trainingMessages,
+    seenList: Array.from(trainingSeenUsers)
+  });
+});
+
+app.post('/api/training/send', upload.single('trainingAttachment'), (req, res) => {
+  const { sender, text } = req.body;
+  let fileUrl = null;
+  let fileType = null;
+
+  if (req.file) {
+    fileUrl = `/training-files/${req.file.filename}`;
+    if (req.file.mimetype.startsWith('image/')) fileType = 'image';
+    else if (req.file.mimetype.startsWith('video/')) fileType = 'video';
+    else fileType = 'file';
+  }
+
+  const msgObj = {
+    id: Date.now(),
+    sender: sender || 'Trainee VIP',
+    text: text || '',
+    fileUrl,
+    fileType,
+    time: new Date().toLocaleTimeString()
+  };
+
+  trainingMessages.push(msgObj);
+  if (trainingMessages.length > 200) trainingMessages.shift();
+  res.json({ success: true, message: msgObj });
+});
+
+// DELETE SINGLE MESSAGE IN TRAINING
+app.delete('/api/training/messages/:id', (req, res) => {
+  const msgId = parseInt(req.params.id);
+  trainingMessages = trainingMessages.filter(m => m.id !== msgId);
+  res.json({ success: true });
+});
+
+// CLEAR ALL MESSAGES IN TRAINING (DELETE ALL)
+app.post('/api/training/clear-all', (req, res) => {
+  trainingMessages = [];
+  trainingSeenUsers.clear();
+  addSystemLog("Training Group Chat Cleared by Admin/User.");
+  res.json({ success: true });
+});
+
+// WEBRTC SIGNALING
+app.post('/api/call/signal', (req, res) => {
+  const { type, data } = req.body;
+  if (type === 'offer') videoCallSignal.offer = data;
+  else if (type === 'answer') videoCallSignal.answer = data;
+  else if (type === 'candidate') videoCallSignal.candidates.push(data);
+  else if (type === 'reset') videoCallSignal = { offer: null, answer: null, candidates: [] };
+  
+  res.json({ success: true });
+});
+
+app.get('/api/call/signal', (req, res) => res.json(videoCallSignal));
+
+// SYSTEM & KEYS APIS
 app.get('/api/server-stats', (req, res) => {
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
@@ -222,7 +323,6 @@ app.post('/api/restore-db', upload.single('dbBackup'), (req, res) => {
   res.redirect('/admin.html');
 });
 
-// HWID Reset Requests
 app.post('/api/request-hwid-reset', (req, res) => {
   const { key, reason } = req.body;
   const db = loadDB();
@@ -270,7 +370,6 @@ app.post('/api/process-hwid-reset', (req, res) => {
   res.json({ success: true });
 });
 
-// Slider API
 app.get('/api/sliders', (req, res) => fs.readdir(sliderFolder, (err, files) => res.json(files || [])));
 app.post('/upload-slider', upload.single('sliderImage'), (req, res) => {
   addSystemLog(`Slider Image Uploaded: ${req.file.filename}`);
@@ -283,14 +382,15 @@ app.delete('/api/sliders/:name', (req, res) => {
   res.json({ success: true });
 });
 
-// Files API
 app.get('/api/files', (req, res) => {
   fs.readdir(uploadFolder, (err, files) => {
     const loaderFiles = (files || []).filter(f => 
       f !== 'homepage-banner.png' && 
       f !== 'slider' && 
       f !== 'gcash-qr.png' && 
-      f !== 'background-music.mp3'
+      f !== 'background-music.mp3' &&
+      f !== 'chat' &&
+      f !== 'training'
     );
     res.json(loaderFiles);
   });
@@ -435,4 +535,4 @@ app.post('/api/validate-key', (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
