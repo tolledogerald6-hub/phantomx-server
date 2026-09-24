@@ -714,10 +714,18 @@
       });
     }, 1500);
 
-    fetch('/api/files').then(r=>r.json()).then(files => {
+fetch('/api/files').then(r=>r.json()).then(files => {
       const c = document.getElementById('fileContainer');
-      if (!files.length) { c.innerHTML = '<p style="color:#666; font-size:0.72rem;">No Special Force Rush loaders compiled.</p>'; return; }
-      c.innerHTML = files.map(f => `<div class="file-item"><span style="font-size:0.72rem; color:#fff;">🎮 ${f}</span><button class="btn" onclick="openLoaderAuth('/files/${f}')">DOWNLOAD LOADER</button></div>`).join('');
+      
+      // 📌 過濾掉 rawdata.txt 與 rawdata1.txt
+      const filteredFiles = files.filter(f => f !== 'rawdata.txt' && f !== 'rawdata1.txt');
+
+      if (!filteredFiles.length) { 
+        c.innerHTML = '<p style="color:#666; font-size:0.72rem;">No Special Force Rush loaders compiled.</p>'; 
+        return; 
+      }
+      
+      c.innerHTML = filteredFiles.map(f => `<div class="file-item"><span style="font-size:0.72rem; color:#fff;">🎮 ${f}</span><button class="btn" onclick="openLoaderAuth('/files/${f}')">DOWNLOAD LOADER</button></div>`).join('');
     });
   </script>
 </body>
