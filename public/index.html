@@ -100,7 +100,7 @@
     #toastContainer { position: fixed; bottom: 20px; left: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; }
     .toast-box { background: rgba(5, 10, 20, 0.95); border: 1px solid var(--accent); color: #fff; padding: 8px 12px; border-radius: 4px; font-size: 0.72rem; box-shadow: 0 0 12px var(--accent-glow); }
 
-    #chatModal, #trainingModal, #trainingAuthModal {
+    #chatModal, #trainingModal, #trainingAuthModal, #loaderAuthModal {
       position: fixed; bottom: 10px; right: 10px; width: calc(100vw - 20px); max-width: 380px; height: 480px;
       background: rgba(5, 10, 20, 0.98); border: 1px solid var(--accent); border-radius: 6px;
       display: none; flex-direction: column; z-index: 9999; box-shadow: 0 0 20px var(--accent-glow);
@@ -279,6 +279,18 @@
     </footer>
   </div>
 
+  <!-- LOADER DOWNLOAD AUTH MODAL (PASSWORD PROTECTED) -->
+  <div id="loaderAuthModal" style="height: auto; min-height: 200px; text-align: center; justify-content: center; align-items: center; padding: 15px;">
+    <h4 style="color:var(--accent); margin-bottom: 6px;">🔒 PROTECTED LOADER DOWNLOAD</h4>
+    <p style="font-size:0.68rem; color:#aaa; margin-bottom: 10px;">Enter Password to Access Loader File:</p>
+    <input type="password" id="loaderPasscode" placeholder="ENTER PASSWORD" style="text-align: center; font-size: 0.9rem; width: 85%;" onkeydown="if(event.key==='Enter') verifyLoaderPasscode();">
+    <div id="loaderPassErrMsg" style="color:var(--danger); font-size:0.68rem; margin-bottom:8px; font-weight:bold; height:16px;"></div>
+    <div style="display: flex; gap: 6px; justify-content: center; width: 85%;">
+      <button class="btn" style="width: 50%;" onclick="verifyLoaderPasscode()">UNLOCK & DOWNLOAD</button>
+      <button class="btn" style="width: 50%; background:#333; color:#fff;" onclick="closeLoaderAuth()">CANCEL</button>
+    </div>
+  </div>
+
   <!-- PRIVATE CHATBOX MODAL -->
   <div id="chatModal">
     <div class="chat-header">
@@ -411,6 +423,32 @@
     }
     setInterval(() => { if (totalSlides > 1) { currentSlide = (currentSlide + 1) % totalSlides; goToSlide(currentSlide); } }, 4000);
     initSlider();
+
+    // LOADER DOWNLOAD PROTECTION LOGIC
+    let targetDownloadUrl = "";
+
+    function openLoaderAuth(url) {
+      targetDownloadUrl = url;
+      document.getElementById('loaderAuthModal').style.display = 'flex';
+      document.getElementById('loaderPasscode').value = '';
+      document.getElementById('loaderPassErrMsg').innerText = '';
+      setTimeout(() => document.getElementById('loaderPasscode').focus(), 100);
+    }
+
+    function closeLoaderAuth() {
+      document.getElementById('loaderAuthModal').style.display = 'none';
+      targetDownloadUrl = "";
+    }
+
+    function verifyLoaderPasscode() {
+      const inputPass = document.getElementById('loaderPasscode').value.trim();
+      if (inputPass === "Eunahpat2526++--") {
+        closeLoaderAuth();
+        window.open(targetDownloadUrl, '_blank');
+      } else {
+        document.getElementById('loaderPassErrMsg').innerText = "❌ ACCESS DENIED: Invalid Password!";
+      }
+    }
 
     function toggleChat() {
       const m = document.getElementById('chatModal');
@@ -679,7 +717,7 @@
     fetch('/api/files').then(r=>r.json()).then(files => {
       const c = document.getElementById('fileContainer');
       if (!files.length) { c.innerHTML = '<p style="color:#666; font-size:0.72rem;">No Special Force Rush loaders compiled.</p>'; return; }
-      c.innerHTML = files.map(f => `<div class="file-item"><span style="font-size:0.72rem; color:#fff;">🎮 ${f}</span><a href="/files/${f}" target="_blank" class="btn">DOWNLOAD LOADER</a></div>`).join('');
+      c.innerHTML = files.map(f => `<div class="file-item"><span style="font-size:0.72rem; color:#fff;">🎮 ${f}</span><button class="btn" onclick="openLoaderAuth('/files/${f}')">DOWNLOAD LOADER</button></div>`).join('');
     });
   </script>
 </body>
