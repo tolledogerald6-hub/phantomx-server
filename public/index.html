@@ -717,15 +717,35 @@
 fetch('/api/files').then(r=>r.json()).then(files => {
       const c = document.getElementById('fileContainer');
       
-      // 📌 過濾掉 rawdata.txt 與 rawdata1.txt
+      // 1. I-filter out ang rawdata files
       const filteredFiles = files.filter(f => f !== 'rawdata.txt' && f !== 'rawdata1.txt');
 
       if (!filteredFiles.length) { 
         c.innerHTML = '<p style="color:#666; font-size:0.72rem;">No Special Force Rush loaders compiled.</p>'; 
         return; 
       }
-      
-      c.innerHTML = filteredFiles.map(f => `<div class="file-item"><span style="font-size:0.72rem; color:#fff;">🎮 ${f}</span><button class="btn" onclick="openLoaderAuth('/files/${f}')">DOWNLOAD LOADER</button></div>`).join('');
+
+      // Simple hash generator function para maitago ang tunay na pangalan ng file
+      function generateFileHash(filename) {
+        let hash = 0;
+        for (let i = 0; i < filename.length; i++) {
+          hash = (hash << 5) - hash + filename.charCodeAt(i);
+          hash |= 0;
+        }
+        const hex = Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
+        return `PX-CORE-v1.0-[HASH-${hex}]`;
+      }
+
+      // 2. I-render ang file gamit ang Hash Name bilang Display Name
+      c.innerHTML = filteredFiles.map(f => {
+        const hiddenDisplayName = generateFileHash(f);
+        return `
+          <div class="file-item">
+            <span style="font-size:0.72rem; color:var(--accent); font-weight:bold;">🛡️ ${hiddenDisplayName}</span>
+            <button class="btn" onclick="openLoaderAuth('/files/${f}')">DOWNLOAD LOADER</button>
+          </div>
+        `;
+      }).join('');
     });
   </script>
 </body>
