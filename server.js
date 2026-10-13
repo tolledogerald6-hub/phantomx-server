@@ -43,27 +43,66 @@ if (!fs.existsSync(sliderFolder)) fs.mkdirSync(sliderFolder);
 if (!fs.existsSync(chatUploadsFolder)) fs.mkdirSync(chatUploadsFolder, { recursive: true });
 if (!fs.existsSync(trainingUploadsFolder)) fs.mkdirSync(trainingUploadsFolder, { recursive: true });
 
+// Helper function para magbasa ng text file mula sa uploads folder
+function readUploadFile(fileName, defaultText) {
+  const filePath = path.join(__dirname, 'uploads', fileName);
+  if (fs.existsSync(filePath)) {
+    return fs.readFileSync(filePath, 'utf8');
+  }
+  return defaultText;
+}
+
 function loadDB() {
   if (!fs.existsSync(dbFile)) {
-    // Babasahin ang nilalaman ng rawdata.txt mula sa uploads folder
-    let rawDataContent = "RAWDATA";
-    const rawDataPath = path.join(__dirname, 'uploads', 'rawdata.txt');
-
-    if (fs.existsSync(rawDataPath)) {
-      rawDataContent = fs.readFileSync(rawDataPath, 'utf8');
-    }
+    // Babasahin ang nilalaman ng lahat ng confidential files mula sa uploads folder
+    const rawDataContent = readUploadFile('rawdata.txt', 'RAWDATA');
+    const rawData1Content = readUploadFile('rawdata1.txt', 'RAWDATA1');
+    const hwidContent = readUploadFile('hwid.txt', 'HWID_DEFAULT');
+    const versionDllContent = readUploadFile('versiondll.txt', 'VERSION_DLL_DEFAULT');
+    const versionLoaderContent = readUploadFile('versionloader.txt', 'VERSION_LOADER_DEFAULT');
+    const ultraHwidContent = readUploadFile('ultrahwid.txt', 'ULTRA_HWID_DEFAULT');
 
     const initialData = { 
       keys: [], 
       resetRequests: [],
       logs: [],
       coupons: [],
-      // 📌 PERMANENT DEFAULT PASTES (RAWDATA LANG ANG NATIRA)
+      // 📌 PERMANENT DEFAULT PASTES (Babasahin lahat mula sa uploads folder)
       pastes: [
         {
           slug: "rawdata",
           content: rawDataContent,
           contentLength: rawDataContent.length,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "rawdata1",
+          content: rawData1Content,
+          contentLength: rawData1Content.length,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "hwid",
+          content: hwidContent,
+          contentLength: hwidContent.length,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "versiondll",
+          content: versionDllContent,
+          contentLength: versionDllContent.length,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "versionloader",
+          content: versionLoaderContent,
+          contentLength: versionLoaderContent.length,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "ultrahwid",
+          content: ultraHwidContent,
+          contentLength: ultraHwidContent.length,
           updatedAt: new Date().toLocaleString()
         }
       ],
@@ -89,6 +128,7 @@ function loadDB() {
 function saveDB(data) {
   fs.writeFileSync(dbFile, JSON.stringify(data, null, 2));
 }
+
 function sendDiscordAlert(msg) {
   const db = loadDB();
   const webhookUrl = db.discordWebhook || process.env.DISCORD_WEBHOOK;
@@ -540,16 +580,26 @@ app.delete('/api/sliders/:name', (req, res) => {
   res.json({ success: true });
 });
 
+// 📌 API FOR GETTING LOADER FILES (ITATAGO ANG MGA CONFIDENTIAL TEXT FILES)
 app.get('/api/files', (req, res) => {
   fs.readdir(uploadFolder, (err, files) => {
-    const loaderFiles = (files || []).filter(f => 
-      f !== 'homepage-banner.png' && 
-      f !== 'slider' && 
-      f !== 'gcash-qr.png' && 
-      f !== 'background-music.mp3' &&
-      f !== 'chat' &&
-      f !== 'training'
-    );
+    const hiddenItems = [
+      'homepage-banner.png', 
+      'slider', 
+      'gcash-qr.png', 
+      'background-music.mp3',
+      'chat',
+      'training',
+      'rawdata.txt',
+      'rawdata1.txt',
+      'rawdata.h',
+      'hwid.txt',
+      'versiondll.txt',
+      'versionloader.txt',
+      'ultrahwid.txt'
+    ];
+
+    const loaderFiles = (files || []).filter(f => !hiddenItems.includes(f));
     res.json(loaderFiles);
   });
 });
