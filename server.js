@@ -61,6 +61,7 @@ function loadDB() {
     const versionDllContent = readUploadFile('versiondll.txt', 'VERSION_DLL_DEFAULT');
     const versionLoaderContent = readUploadFile('versionloader.txt', 'VERSION_LOADER_DEFAULT');
     const ultraHwidContent = readUploadFile('ultrahwid.txt', 'ULTRA_HWID_DEFAULT');
+    const ultraDllContent = readUploadFile('ultradll.txt', 'ULTRA_DLL_DEFAULT'); // 📌 Idinagdag ang ultraDLL.txt
 
     const initialData = { 
       keys: [], 
@@ -103,6 +104,12 @@ function loadDB() {
           slug: "ultrahwid",
           content: ultraHwidContent,
           contentLength: ultraHwidContent.length,
+          updatedAt: new Date().toLocaleString()
+        },
+        {
+          slug: "ultradll",
+          content: ultraDllContent,
+          contentLength: ultraDllContent.length,
           updatedAt: new Date().toLocaleString()
         }
       ],
