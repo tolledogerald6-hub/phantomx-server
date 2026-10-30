@@ -2,769 +2,385 @@ const express = require('express');
 const multer  = require('multer');
 const path = require('path');
 const fs = require('fs');
-const https = require('https');
-const os = require('os');
 const crypto = require('crypto');
-
-if (fs.existsSync(path.join(__dirname, '.env'))) {
-  const envConfig = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
-  envConfig.split('\n').forEach(line => {
-    const [key, value] = line.split('=');
-    if (key && value) {
-      process.env[key.trim()] = value.trim();
-    }
-  });
-}
+const nodemailer = require('nodemailer');
+const PDFDocument = require('pdfkit');
+const mongoose = require('mongoose');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 
-const ADMIN_USER = process.env.ADMIN_USER || "ADMIN";
-const ADMIN_PASS = process.env.ADMIN_PASS || "2026!";
+const ADMIN_USER = "ADMIN";
+const ADMIN_PASS = "LIEZL2026!";
 
+// 📧 EMAIL CONFIGURATION
+const RESORT_EMAIL = "tolledogerald6@gmail.com";
+const GMAIL_APP_PASS = "hmnechkaznphhbok";
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: { user: RESORT_EMAIL, pass: GMAIL_APP_PASS }
+});
+
+// 🔒 MULTI-DEVICE ADMIN SESSIONS
 let activeSessions = new Set();
-let activeLoaderClients = new Map();
-let chatMessages = [];
-let trainingMessages = [];
-let trainingSeenUsers = new Set();
-let videoCallSignal = { offer: null, answer: null, candidates: [] };
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// ☁️ CLOUDINARY CONFIGURATION
+cloudinary.config({
+  cloud_name: 'q7iyxzr4',
+  api_key: '454148557875984',
+  api_secret: '454148557875984' 
+});
 
-const uploadFolder = path.join(__dirname, 'uploads');
-const sliderFolder = path.join(__dirname, 'uploads', 'slider');
-const chatUploadsFolder = path.join(__dirname, 'uploads', 'chat');
-const trainingUploadsFolder = path.join(__dirname, 'uploads', 'training');
-const dbFile = path.join(__dirname, 'database.json');
-
-if (!fs.existsSync(uploadFolder)) fs.mkdirSync(uploadFolder);
-if (!fs.existsSync(sliderFolder)) fs.mkdirSync(sliderFolder);
-if (!fs.existsSync(chatUploadsFolder)) fs.mkdirSync(chatUploadsFolder, { recursive: true });
-if (!fs.existsSync(trainingUploadsFolder)) fs.mkdirSync(trainingUploadsFolder, { recursive: true });
-
-// Helper function para magbasa ng text file mula sa uploads folder
-function readUploadFile(fileName, defaultText) {
-  const filePath = path.join(__dirname, 'uploads', fileName);
-  if (fs.existsSync(filePath)) {
-    return fs.readFileSync(filePath, 'utf8');
+// MULTER CLOUDINARY STORAGE (Inayos ang params syntax para iwas error)
+const sliderStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'resort_sliders',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif']
   }
-  return defaultText;
-}
+});
 
-function loadDB() {
-  if (!fs.existsSync(dbFile)) {
-    // Babasahin ang nilalaman ng lahat ng confidential files mula sa uploads folder
-    const rawDataContent = readUploadFile('rawdata.txt', 'RAWDATA');
-    const rawData1Content = readUploadFile('rawdata1.txt', 'RAWDATA1');
-    const hwidContent = readUploadFile('hwid.txt', 'HWID_DEFAULT');
-    const versionDllContent = readUploadFile('versiondll.txt', 'VERSION_DLL_DEFAULT');
-    const versionLoaderContent = readUploadFile('versionloader.txt', 'VERSION_LOADER_DEFAULT');
-    const ultraHwidContent = readUploadFile('ultrahwid.txt', 'ULTRA_HWID_DEFAULT');
-    const ultraDllContent = readUploadFile('ultradll.txt', 'ULTRA_DLL_DEFAULT'); // 📌 Idinagdag ang ultraDLL.txt
-
-    const initialData = { 
-      keys: [], 
-      resetRequests: [],
-      logs: [],
-      coupons: [],
-      // 📌 PERMANENT DEFAULT PASTES (Babasahin lahat mula sa uploads folder)
-      pastes: [
-        {
-          slug: "rawdata",
-          content: rawDataContent,
-          contentLength: rawDataContent.length,
-          updatedAt: new Date().toLocaleString()
-        },
-        {
-          slug: "rawdata1",
-          content: rawData1Content,
-          contentLength: rawData1Content.length,
-          updatedAt: new Date().toLocaleString()
-        },
-        {
-          slug: "hwid",
-          content: hwidContent,
-          contentLength: hwidContent.length,
-          updatedAt: new Date().toLocaleString()
-        },
-        {
-          slug: "versiondll",
-          content: versionDllContent,
-          contentLength: versionDllContent.length,
-          updatedAt: new Date().toLocaleString()
-        },
-        {
-          slug: "versionloader",
-          content: versionLoaderContent,
-          contentLength: versionLoaderContent.length,
-          updatedAt: new Date().toLocaleString()
-        },
-        {
-          slug: "ultrahwid",
-          content: ultraHwidContent,
-          contentLength: ultraHwidContent.length,
-          updatedAt: new Date().toLocaleString()
-        },
-        {
-          slug: "ultradll",
-          content: ultraDllContent,
-          contentLength: ultraDllContent.length,
-          updatedAt: new Date().toLocaleString()
-        }
-      ],
-      downloadCount: 0,
-      maintenance: false, 
-      loaderVersion: "1.0.0", 
-      discordWebhook: process.env.DISCORD_WEBHOOK || "",
-      broadcastMsg: "PHANTOM X SYSTEM - ALL SYSTEMS OPERATIONAL.",
-      gcashName: "RAGNAR X",
-      gcashNumber: "09XX-XXX-XXXX"
+const facilityStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    let resourceType = 'image';
+    if (file.mimetype.startsWith('video') || req.body.mediaType === 'video') {
+      resourceType = 'video';
+    }
+    return {
+      folder: 'resort_facilities',
+      resource_type: resourceType,
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm', 'mov']
     };
-    fs.writeFileSync(dbFile, JSON.stringify(initialData, null, 2));
-    return initialData;
-  }
-  const data = JSON.parse(fs.readFileSync(dbFile));
-  if (!data.resetRequests) data.resetRequests = [];
-  if (!data.coupons) data.coupons = [];
-  if (!data.pastes) data.pastes = [];
-  if (data.downloadCount === undefined) data.downloadCount = 0;
-  return data;
-}
-
-function saveDB(data) {
-  fs.writeFileSync(dbFile, JSON.stringify(data, null, 2));
-}
-
-function sendDiscordAlert(msg) {
-  const db = loadDB();
-  const webhookUrl = db.discordWebhook || process.env.DISCORD_WEBHOOK;
-  if (!webhookUrl) return;
-
-  try {
-    const url = new URL(webhookUrl);
-    const payload = JSON.stringify({ content: msg });
-    const req = https.request(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': payload.length }
-    });
-    req.write(payload);
-    req.end();
-  } catch(e) {}
-}
-
-function addSystemLog(msg, req = null) {
-  const db = loadDB();
-  if (!db.logs) db.logs = [];
-  const ip = req ? (req.ip || req.connection.remoteAddress || 'IP:Internal') : 'IP:System';
-  const logEntry = `[${new Date().toLocaleTimeString()}] [${ip}] ${msg}`;
-  db.logs.unshift(logEntry);
-  if (db.logs.length > 60) db.logs.pop();
-  saveDB(db);
-
-  sendDiscordAlert(`🤖 **[PHANTOM X LOG]** ${msg}`);
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    if (file.fieldname === 'sliderImage') cb(null, sliderFolder);
-    else if (file.fieldname === 'chatAttachment') cb(null, chatUploadsFolder);
-    else if (file.fieldname === 'trainingAttachment') cb(null, trainingUploadsFolder);
-    else cb(null, uploadFolder);
-  },
-  filename: (req, file, cb) => {
-    if (file.fieldname === 'dbBackup') cb(null, 'database.json');
-    else if (file.fieldname === 'gcashQr') cb(null, 'gcash-qr.png');
-    else if (file.fieldname === 'bgMusic') cb(null, 'background-music.mp3');
-    else cb(null, Date.now() + '-' + file.originalname);
   }
 });
-const upload = multer({ storage });
 
+const uploadSlider = multer({ storage: sliderStorage });
+const uploadFacility = multer({ storage: facilityStorage });
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
-app.use('/slider-images', express.static(sliderFolder));
-app.use('/chat-files', express.static(chatUploadsFolder));
-app.use('/training-files', express.static(trainingUploadsFolder));
 
-// 🚀 PHANTOM PASTEBIN RAW DIRECT LINK ENDPOINT
-app.get('/raw/:slug', (req, res) => {
-  const db = loadDB();
-  const targetSlug = req.params.slug.trim().toLowerCase();
-  const foundPaste = (db.pastes || []).find(p => p.slug.toLowerCase() === targetSlug);
+// 🍃 MONGODB ATLAS CONNECTION
+const MONGO_URI = "mongodb+srv://geraldtolledo6_db_user:DSW1UVljW1d3Fk5S@cluster0.vthil0v.mongodb.net/casa_liezl_resort?retryWrites=true&w=majority";
 
-  if (foundPaste) {
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.send(foundPaste.content);
-  } else {
-    res.status(404).send("PASTE NOT FOUND");
-  }
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("✅ Connected to MongoDB Atlas Successfully!"))
+  .catch(err => console.error("❌ MongoDB Connection Error:", err));
+
+// MONGODB SCHEMAS & MODELS
+const resortSchema = new mongoose.Schema({
+  singleton: { type: String, default: "main_config", unique: true },
+  bookings: { type: Array, default: [] },
+  reviews: { 
+    type: Array, 
+    default: [{ id: 1, name: "Maria Clara", rating: 5, comment: "Napakaganda ng resort! Malinis ang tubig at mabait ang owner.", date: "10/24/2026" }] 
+  },
+  facilities: { type: Array, default: [] },
+  rates: { 
+    type: Object, 
+    default: { dayTour: 150, nightTour: 180, overnight: 300 } 
+  },
+  gcashName: { type: String, default: "LIEZL RESORT" },
+  gcashNumber: { type: String, default: "09XX-XXX-XXXX" }
 });
 
-// PASTEBIN MANAGEMENT APIs
-app.get('/api/pastes', (req, res) => res.json(loadDB().pastes || []));
+const ResortModel = mongoose.model('ResortConfig', resortSchema);
 
-app.post('/api/pastes', (req, res) => {
-  const { slug, content } = req.body;
-  const db = loadDB();
-  if (!db.pastes) db.pastes = [];
+// HELPER: GET OR CREATE DB DATA
+async function getDB() {
+  let doc = await ResortModel.findOne({ singleton: "main_config" });
+  if (!doc) {
+    doc = new ResortModel({ singleton: "main_config" });
+    await doc.save();
+  }
+  return doc;
+}
 
-  const pasteSlug = (slug || Date.now().toString()).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-  const existingIdx = db.pastes.findIndex(p => p.slug === pasteSlug);
+async function saveDB(data) {
+  let doc = await ResortModel.findOne({ singleton: "main_config" });
+  if (!doc) {
+    doc = new ResortModel({ singleton: "main_config", ...data });
+  } else {
+    doc.bookings = data.bookings;
+    doc.reviews = data.reviews;
+    doc.facilities = data.facilities;
+    doc.rates = data.rates;
+    doc.gcashName = data.gcashName;
+    doc.gcashNumber = data.gcashNumber;
+  }
+  await doc.save();
+}
 
-  const pasteObj = {
-    slug: pasteSlug,
-    content: content || '',
-    contentLength: (content || '').length,
-    updatedAt: new Date().toLocaleString()
+function authAdmin(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token || !activeSessions.has(token)) {
+    return res.status(401).json({ success: false, message: "Unauthorized Admin Access!" });
+  }
+  next();
+}
+
+function sendEmailNotification(subject, text) {
+  const mailOptions = {
+    from: `"Casa Liezl Private Resort" <${RESORT_EMAIL}>`,
+    to: RESORT_EMAIL,
+    subject: subject,
+    text: text
   };
 
-  if (existingIdx !== -1) {
-    db.pastes[existingIdx] = pasteObj;
-  } else {
-    db.pastes.push(pasteObj);
-  }
-
-  saveDB(db);
-  addSystemLog(`Phantom Pastebin Created/Updated: [/raw/${pasteSlug}]`, req);
-  res.json({ success: true, slug: pasteSlug });
-});
-
-app.delete('/api/pastes/:slug', (req, res) => {
-  const db = loadDB();
-  db.pastes = (db.pastes || []).filter(p => p.slug !== req.params.slug);
-  saveDB(db);
-  addSystemLog(`Phantom Paste Deleted: [/raw/${req.params.slug}]`, req);
-  res.json({ success: true });
-});
-
-app.get('/files/:filename', (req, res) => {
-  const filePath = path.join(uploadFolder, req.params.filename);
-  if (fs.existsSync(filePath)) {
-    const db = loadDB();
-    db.downloadCount = (db.downloadCount || 0) + 1;
-    saveDB(db);
-    addSystemLog(`Loader Executable Downloaded: ${req.params.filename}`, req);
-    res.download(filePath);
-  } else {
-    res.status(404).send("File Not Found");
-  }
-});
-
-app.get('/api/export-keys-txt', (req, res) => {
-  const db = loadDB();
-  const activeKeys = db.keys.filter(k => k.status === 'ACTIVE');
-  
-  let txtContent = "==========================================\n";
-  txtContent += "      PHANTOM X - ACTIVE LICENSE KEYS     \n";
-  txtContent += "==========================================\n\n";
-
-  activeKeys.forEach((k, idx) => {
-    txtContent += `${idx + 1}. KEY: ${k.key} | CLIENT: ${k.clientName} | DURATION: ${k.duration} | EXPIRES: ${new Date(k.expiresAt).toLocaleString()}\n`;
+  transporter.sendMail(mailOptions, (err, info) => {
+    if (err) console.error("❌ Email Sending Failed Error:", err);
+    else console.log("✅ Email Sent Successfully Response:", info.response);
   });
+}
 
-  res.setHeader('Content-disposition', 'attachment; filename=phantomx_active_keys.txt');
-  res.setHeader('Content-type', 'text/plain');
-  res.send(txtContent);
+// SETTINGS API
+app.get('/api/settings', async (req, res) => {
+  const db = await getDB();
+  res.json({ gcashName: db.gcashName, gcashNumber: db.gcashNumber, rates: db.rates });
 });
 
-app.post('/api/claim-key', (req, res) => {
-  const { gcashRef, duration } = req.body;
-  if (!gcashRef || gcashRef.trim().length < 6) {
-    return res.json({ success: false, message: "Please enter a valid GCash Reference Number!" });
-  }
-
-  const clientIp = req.ip || req.connection.remoteAddress || 'Unknown IP';
-  const alertMessage = 
-    `📩 **[NEW PAYMENT TRANSACTION SUBMITTED]**\n` +
-    `> 👤 **Client IP:** \`${clientIp}\`\n` +
-    `> 🧾 **GCash Ref No:** \`${gcashRef.trim()}\`\n` +
-    `> ⏳ **Plan Selected:** \`${duration || '1-Day'}\`\n` +
-    `> 🕒 **Time:** \`${new Date().toLocaleTimeString()}\`\n` +
-    `⚠️ *Please check your GCash App to verify payment before generating the key in Admin Panel.*`;
-
-  sendDiscordAlert(alertMessage);
-  addSystemLog(`GCash Payment Submitted for Verification: Ref [${gcashRef.trim()}]`, req);
-
-  res.json({ 
-    success: true, 
-    message: "Transaction details sent to Admin! Please message us on Discord with your GCash Reference Number to receive your VIP key." 
-  });
+app.post('/api/admin/settings', authAdmin, async (req, res) => {
+  const { gcashName, gcashNumber, dayTour, nightTour, overnight } = req.body;
+  const db = await getDB();
+  if (gcashName !== undefined) db.gcashName = String(gcashName).trim();
+  if (gcashNumber !== undefined) db.gcashNumber = String(gcashNumber).trim();
+  db.rates = {
+    dayTour: parseInt(dayTour) || db.rates.dayTour,
+    nightTour: parseInt(nightTour) || db.rates.nightTour,
+    overnight: parseInt(overnight) || db.rates.overnight
+  };
+  await saveDB(db);
+  res.json({ success: true, message: "Settings updated successfully!" });
 });
 
-app.post('/api/login', (req, res) => {
-  const user = (req.body.username || '').trim();
-  const pass = (req.body.password || '').trim();
+// PDF VOUCHER
+app.get('/api/download-voucher/:id', async (req, res) => {
+  const db = await getDB();
+  const booking = db.bookings.find(b => b.id === parseInt(req.params.id));
+  if (!booking) return res.status(404).send("Booking voucher not found.");
 
-  if (user === ADMIN_USER && pass === ADMIN_PASS) {
-    const token = crypto.randomBytes(32).toString('hex');
-    activeSessions.add(token);
-    addSystemLog(`Admin Login Successful`, req);
-    res.json({ success: true, token });
-  } else {
-    addSystemLog(`Failed Admin Login Attempt`, req);
-    res.status(401).json({ success: false, message: "Invalid credentials" });
-  }
+  const doc = new PDFDocument({ margin: 50 });
+  res.setHeader('Content-disposition', `attachment; filename="Voucher-${booking.id}.pdf"`);
+  res.setHeader('Content-type', 'application/pdf');
+
+  doc.pipe(res);
+  doc.fillColor('#008080').fontSize(22).text('CASA LIEZL PRIVATE RESORT', { align: 'center' });
+  doc.fontSize(12).fillColor('#666').text('Official Booking Receipt & Confirmation Voucher', { align: 'center' });
+  doc.moveDown(1.5);
+  doc.fillColor('#333').fontSize(12);
+  doc.text(`Booking ID: #${booking.id}`);
+  doc.text(`Date Issued: ${booking.createdAt}`);
+  doc.moveDown(0.5);
+  doc.strokeColor('#008080').lineWidth(1).moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+  doc.moveDown(1);
+  doc.fontSize(14).fillColor('#004d4d').text('GUEST DETAILS', { underline: true });
+  doc.fontSize(12).fillColor('#333');
+  doc.text(`Guest Name: ${booking.name}`);
+  doc.text(`Contact Phone: ${booking.phone}`);
+  doc.moveDown(1);
+  doc.fontSize(14).fillColor('#004d4d').text('RESERVATION DETAILS', { underline: true });
+  doc.fontSize(12).fillColor('#333');
+  doc.text(`Check-in Date: ${booking.checkInDate}`);
+  doc.text(`Shift: ${booking.stayType}`);
+  doc.text(`Accommodation: ${booking.packageType}`);
+  doc.text(`Guests: ${booking.guests} Pax`);
+  doc.text(`Special Notes: ${booking.notes || 'N/A'}`);
+  doc.moveDown(1);
+  doc.fontSize(14).fillColor('#004d4d').text('PAYMENT INFO', { underline: true });
+  doc.fontSize(12).fillColor('#333');
+  doc.text(`GCash Ref No: ${booking.gcashRef}`);
+  doc.text(`Status: ${booking.status}`);
+  doc.moveDown(2);
+  doc.fontSize(10).fillColor('#888').text('Pakipakita ang PDF Voucher na ito sa entrance ng Casa Liezl Private Resort.', { align: 'center' });
+  doc.end();
 });
 
-app.post('/api/logout', (req, res) => {
-  const token = req.headers['authorization'];
-  if (token) activeSessions.delete(token);
+// REVIEWS APIS
+app.get('/api/reviews', async (req, res) => {
+  const db = await getDB();
+  res.json(db.reviews || []);
+});
+
+app.post('/api/reviews', async (req, res) => {
+  const { name, rating, comment } = req.body;
+  if (!name || !comment) return res.json({ success: false, message: "Please enter your name and review!" });
+
+  const db = await getDB();
+  db.reviews.unshift({ id: Date.now(), name: name.trim(), rating: parseInt(rating) || 5, comment: comment.trim(), date: new Date().toLocaleDateString() });
+  await saveDB(db);
+  res.json({ success: true, message: "Thank you for your feedback!" });
+});
+
+app.delete('/api/reviews/:id', authAdmin, async (req, res) => {
+  const db = await getDB();
+  db.reviews = db.reviews.filter(r => r.id !== parseInt(req.params.id));
+  await saveDB(db);
   res.json({ success: true });
 });
 
-app.get('/api/verify-session', (req, res) => {
-  const token = req.headers['authorization'];
-  if (token && activeSessions.has(token)) res.json({ valid: true });
-  else res.json({ valid: false });
+// FACILITIES GALLERY APIS (CLOUD STORAGE)
+app.get('/api/facilities', async (req, res) => {
+  const db = await getDB();
+  res.json(db.facilities || []);
 });
 
-setInterval(() => {
-  const db = loadDB();
-  const now = new Date().getTime();
-  db.keys.forEach(k => {
-    if (k.status === 'ACTIVE' && !k.reminderSent) {
-      const expTime = new Date(k.expiresAt).getTime();
-      const hoursLeft = (expTime - now) / (1000 * 60 * 60);
-      if (hoursLeft > 0 && hoursLeft <= 24) {
-        k.reminderSent = true;
-        saveDB(db);
-        sendDiscordAlert(`⚠️ **[24H RENEWAL ALERT]** Key \`${k.key}\` for Client **[${k.clientName}]** will expire in 24 hours!`);
-      }
-    }
-  });
-}, 300000);
+app.post('/upload-facility', uploadFacility.single('facilityMedia'), async (req, res) => {
+  try {
+    if (!req.file) return res.redirect('/admin.html?error=nofile');
 
-app.post('/api/heartbeat', (req, res) => {
-  const { key, hwid } = req.body;
-  if (key) activeLoaderClients.set(key, { hwid, lastPing: Date.now() });
-  res.json({ success: true });
-});
+    const { facilityTitle, mediaType } = req.body;
+    const db = await getDB();
+    const isVideo = mediaType === 'video' || (req.file.mimetype && req.file.mimetype.startsWith('video'));
 
-setInterval(() => {
-  const now = Date.now();
-  for (let [key, data] of activeLoaderClients.entries()) {
-    if (now - data.lastPing > 60000) activeLoaderClients.delete(key);
-  }
-}, 10000);
-
-app.post('/api/report-crack-attempt', (req, res) => {
-  const { key, hwid, reason } = req.body;
-  const db = loadDB();
-  const cleanKey = (key || '').toString().trim().toUpperCase();
-  const foundKey = db.keys.find(k => k.key.trim().toUpperCase() === cleanKey);
-
-  if (foundKey) {
-    foundKey.status = "BANNED";
-    saveDB(db);
-  }
-
-  addSystemLog(`🚨 [SECURITY BREACH] Key: ${key || 'UNKNOWN'} | HWID: ${hwid || 'UNKNOWN'} | REASON: ${reason || 'Debugger Attached'}`, req);
-  res.json({ success: true });
-});
-
-app.get('/api/coupons', (req, res) => res.json(loadDB().coupons || []));
-app.post('/api/coupons', (req, res) => {
-  const { code, discountPercent } = req.body;
-  const db = loadDB();
-  db.coupons.push({
-    id: Date.now(),
-    code: (code || '').toUpperCase().trim(),
-    discountPercent: parseInt(discountPercent) || 10,
-    createdAt: new Date().toLocaleDateString()
-  });
-  saveDB(db);
-  addSystemLog(`Created Coupon Code: ${code} (${discountPercent}% OFF)`, req);
-  res.json({ success: true });
-});
-
-app.delete('/api/coupons/:id', (req, res) => {
-  const db = loadDB();
-  db.coupons = db.coupons.filter(c => c.id !== parseInt(req.params.id));
-  saveDB(db);
-  res.json({ success: true });
-});
-
-app.post('/api/verify-coupon', (req, res) => {
-  const { code } = req.body;
-  const db = loadDB();
-  const found = db.coupons.find(c => c.code === (code || '').toUpperCase().trim());
-
-  if (found) res.json({ success: true, discountPercent: found.discountPercent });
-  else res.json({ success: false, message: "Invalid or expired coupon code." });
-});
-
-app.get('/api/chat/messages', (req, res) => res.json(chatMessages));
-app.post('/api/chat/send', upload.single('chatAttachment'), (req, res) => {
-  const { sender, text } = req.body;
-  let fileUrl = null; let fileType = null;
-
-  if (req.file) {
-    fileUrl = `/chat-files/${req.file.filename}`;
-    if (req.file.mimetype.startsWith('image/')) fileType = 'image';
-    else if (req.file.mimetype.startsWith('video/')) fileType = 'video';
-    else fileType = 'file';
-  }
-
-  const msgObj = { id: Date.now(), sender: sender || 'VIP Guest', text: text || '', fileUrl, fileType, time: new Date().toLocaleTimeString() };
-  chatMessages.push(msgObj);
-  if (chatMessages.length > 100) chatMessages.shift();
-  res.json({ success: true, message: msgObj });
-});
-
-app.get('/api/training/messages', (req, res) => {
-  const username = req.query.user || 'Guest';
-  trainingSeenUsers.add(username);
-  res.json({ messages: trainingMessages, seenList: Array.from(trainingSeenUsers) });
-});
-
-app.post('/api/training/send', upload.single('trainingAttachment'), (req, res) => {
-  const { sender, text } = req.body;
-  let fileUrl = null; let fileType = null;
-
-  if (req.file) {
-    fileUrl = `/training-files/${req.file.filename}`;
-    if (req.file.mimetype.startsWith('image/')) fileType = 'image';
-    else if (req.file.mimetype.startsWith('video/')) fileType = 'video';
-    else fileType = 'file';
-  }
-
-  const msgObj = { id: Date.now(), sender: sender || 'Trainee VIP', text: text || '', fileUrl, fileType, time: new Date().toLocaleTimeString() };
-  trainingMessages.push(msgObj);
-  if (trainingMessages.length > 200) trainingMessages.shift();
-  res.json({ success: true, message: msgObj });
-});
-
-app.delete('/api/training/messages/:id', (req, res) => {
-  trainingMessages = trainingMessages.filter(m => m.id !== parseInt(req.params.id));
-  res.json({ success: true });
-});
-
-app.post('/api/training/clear-all', (req, res) => {
-  trainingMessages = [];
-  trainingSeenUsers.clear();
-  addSystemLog("Training Group Chat Cleared.", req);
-  res.json({ success: true });
-});
-
-app.post('/api/call/signal', (req, res) => {
-  const { type, data } = req.body;
-  if (type === 'offer') videoCallSignal.offer = data;
-  else if (type === 'answer') videoCallSignal.answer = data;
-  else if (type === 'candidate') videoCallSignal.candidates.push(data);
-  else if (type === 'reset') videoCallSignal = { offer: null, answer: null, candidates: [] };
-  res.json({ success: true });
-});
-
-app.get('/api/call/signal', (req, res) => res.json(videoCallSignal));
-
-app.get('/api/server-stats', (req, res) => {
-  const totalMem = os.totalmem();
-  const freeMem = os.freemem();
-  const usedMemPercent = Math.round(((totalMem - freeMem) / totalMem) * 100);
-  const db = loadDB();
-  
-  res.json({
-    memoryPercent: usedMemPercent,
-    freeMemMB: Math.round(freeMem / 1024 / 1024),
-    uptimeSeconds: Math.floor(process.uptime()),
-    cpuCores: os.cpus().length,
-    totalKeys: db.keys.length,
-    activeKeys: db.keys.filter(k => k.status === 'ACTIVE').length,
-    bannedKeys: db.keys.filter(k => k.status === 'BANNED').length,
-    pendingResets: db.resetRequests.filter(r => r.status === 'PENDING').length,
-    activeLoadersOnline: activeLoaderClients.size,
-    totalDownloads: db.downloadCount || 0
-  });
-});
-
-app.get('/api/logs', (req, res) => res.json(loadDB().logs || []));
-
-app.get('/api/settings', (req, res) => {
-  const db = loadDB();
-  res.json({ 
-    maintenance: db.maintenance, 
-    version: db.loaderVersion, 
-    webhook: db.discordWebhook,
-    broadcast: db.broadcastMsg || "",
-    gcashName: db.gcashName || "RagnarX",
-    gcashNumber: db.gcashNumber || "09XX-XXX-XXXX"
-  });
-});
-
-app.post('/api/settings', (req, res) => {
-  const db = loadDB();
-  if (req.body.version !== undefined) db.loaderVersion = req.body.version;
-  if (req.body.webhook !== undefined) db.discordWebhook = req.body.webhook;
-  if (req.body.broadcast !== undefined) db.broadcastMsg = req.body.broadcast;
-  if (req.body.gcashName !== undefined) db.gcashName = req.body.gcashName;
-  if (req.body.gcashNumber !== undefined) db.gcashNumber = req.body.gcashNumber;
-  saveDB(db);
-  addSystemLog("Settings Updated.", req);
-  res.json({ success: true });
-});
-
-app.post('/upload-gcash', upload.single('gcashQr'), (req, res) => {
-  addSystemLog("GCash QR Code Image Updated.", req);
-  res.redirect('/admin.html');
-});
-
-app.post('/upload-music', upload.single('bgMusic'), (req, res) => {
-  addSystemLog("Background Music MP3 Updated.", req);
-  res.redirect('/admin.html');
-});
-
-app.post('/api/maintenance', (req, res) => {
-  const db = loadDB();
-  db.maintenance = req.body.maintenance;
-  saveDB(db);
-  addSystemLog(db.maintenance ? "⚠️ MAINTENANCE ACTIVE" : "✅ MAINTENANCE DISABLED", req);
-  res.json({ success: true, maintenance: db.maintenance });
-});
-
-app.get('/api/backup-db', (req, res) => res.download(dbFile, 'phantomx_database_backup.json'));
-app.post('/api/restore-db', upload.single('dbBackup'), (req, res) => {
-  addSystemLog("Database Restored.", req);
-  res.redirect('/admin.html');
-});
-
-app.post('/api/request-hwid-reset', (req, res) => {
-  const { key, reason } = req.body;
-  const db = loadDB();
-  const cleanKey = (key || '').toString().trim().toUpperCase();
-  const foundKey = db.keys.find(k => k.key.trim().toUpperCase() === cleanKey);
-
-  if (!foundKey) return res.status(404).json({ success: false, message: "Key not found!" });
-
-  const existing = db.resetRequests.find(r => r.key === foundKey.key && r.status === 'PENDING');
-  if (existing) return res.json({ success: false, message: "Pending request exists!" });
-
-  db.resetRequests.push({
-    id: Date.now(),
-    key: foundKey.key,
-    clientName: foundKey.clientName,
-    reason: reason || "PC Change / Format",
-    status: "PENDING",
-    requestedAt: new Date().toLocaleString()
-  });
-
-  saveDB(db);
-  addSystemLog(`HWID Reset Requested by [${foundKey.clientName}]`, req);
-  res.json({ success: true, message: "Reset request submitted to Admin." });
-});
-
-app.get('/api/reset-requests', (req, res) => res.json(loadDB().resetRequests || []));
-
-app.post('/api/process-hwid-reset', (req, res) => {
-  const { id, action } = req.body;
-  const db = loadDB();
-  const reqObj = db.resetRequests.find(r => r.id === id);
-
-  if (!reqObj) return res.status(404).json({ success: false });
-
-  if (action === 'APPROVE') {
-    reqObj.status = 'APPROVED';
-    const targetKey = db.keys.find(k => k.key === reqObj.key);
-    if (targetKey) targetKey.hwid = "UNBOUND";
-    addSystemLog(`Approved HWID Reset for [${reqObj.clientName}]`, req);
-  } else {
-    reqObj.status = 'REJECTED';
-    addSystemLog(`Rejected HWID Reset for [${reqObj.clientName}]`, req);
-  }
-
-  saveDB(db);
-  res.json({ success: true });
-});
-
-app.get('/api/sliders', (req, res) => fs.readdir(sliderFolder, (err, files) => res.json(files || [])));
-app.post('/upload-slider', upload.single('sliderImage'), (req, res) => {
-  addSystemLog(`Slider Image Uploaded: ${req.file.filename}`, req);
-  res.redirect('/admin.html');
-});
-app.delete('/api/sliders/:name', (req, res) => {
-  const p = path.join(sliderFolder, req.params.name);
-  if (fs.existsSync(p)) fs.unlinkSync(p);
-  addSystemLog(`Slider Deleted: ${req.params.name}`, req);
-  res.json({ success: true });
-});
-
-// 📌 API FOR GETTING LOADER FILES (ITATAGO ANG MGA CONFIDENTIAL TEXT FILES)
-app.get('/api/files', (req, res) => {
-  fs.readdir(uploadFolder, (err, files) => {
-    const hiddenItems = [
-      'homepage-banner.png', 
-      'slider', 
-      'gcash-qr.png', 
-      'background-music.mp3',
-      'chat',
-      'training',
-      'rawdata.txt',
-      'rawdata1.txt',
-      'rawdata.h',
-      'hwid.txt',
-      'versiondll.txt',
-      'versionloader.txt',
-      'ultrahwid.txt'
-    ];
-
-    const loaderFiles = (files || []).filter(f => !hiddenItems.includes(f));
-    res.json(loaderFiles);
-  });
-});
-
-app.post('/upload', upload.single('file'), (req, res) => {
-  addSystemLog(`Loader File Uploaded: ${req.file.originalname}`, req);
-  res.redirect('/admin.html');
-});
-
-app.delete('/api/files/:name', (req, res) => {
-  const p = path.join(uploadFolder, req.params.name);
-  if (fs.existsSync(p)) fs.unlinkSync(p);
-  addSystemLog(`File Deleted: ${req.params.name}`, req);
-  res.json({ success: true });
-});
-
-app.post('/api/check-key-status', (req, res) => {
-  const { key } = req.body;
-  const db = loadDB();
-  const cleanKey = (key || '').toString().trim().toUpperCase();
-  const foundKey = db.keys.find(k => k.key.trim().toUpperCase() === cleanKey);
-
-  if (!foundKey) return res.json({ success: false, message: "License key does not exist." });
-
-  const isExpired = new Date(foundKey.expiresAt) < new Date();
-  res.json({
-    success: true,
-    clientName: foundKey.clientName,
-    key: foundKey.key,
-    status: isExpired ? "EXPIRED" : foundKey.status,
-    hwidStatus: foundKey.hwid === "UNBOUND" ? "UNBOUND" : "LOCKED TO PC",
-    expiresAtISO: foundKey.expiresAt,
-    expiresAt: new Date(foundKey.expiresAt).toLocaleString()
-  });
-});
-
-app.post('/api/generate-key', (req, res) => {
-  const { clientName, duration, amount } = req.body;
-  const db = loadDB();
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const seg = () => Array.from({length: 4}, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
-  
-  let daysToAdd = 1;
-  if (duration === "7-Days") daysToAdd = 7;
-  if (duration === "30-Days") daysToAdd = 30;
-
-  const count = parseInt(amount) || 1;
-  const generatedList = [];
-
-  for (let i = 0; i < count; i++) {
-    const expireDate = new Date();
-    expireDate.setDate(expireDate.getDate() + daysToAdd);
-
-    const keyStr = `PX-${duration.toUpperCase().replace('-', '')}-${seg()}-${seg()}`;
-    const nameStr = count > 1 ? `${clientName}_${i+1}` : (clientName || "VIP User");
-
-    const keyData = {
-      id: Date.now() + i,
-      clientName: nameStr,
-      key: keyStr,
-      duration: duration,
-      hwid: "UNBOUND",
-      status: "ACTIVE",
-      expiresAt: expireDate.toISOString(),
-      createdAt: new Date().toLocaleDateString()
+    const newFacility = {
+      id: 'fac_' + Date.now(),
+      title: facilityTitle ? facilityTitle.trim() : 'Resort Facility',
+      type: isVideo ? 'video' : 'image',
+      filename: req.file.path // Cloudinary Secure URL
     };
 
-    db.keys.push(keyData);
-    generatedList.push(keyData);
+    db.facilities.unshift(newFacility);
+    await saveDB(db);
+    res.redirect('/admin.html');
+  } catch (err) {
+    console.error("Facility Upload Error:", err);
+    res.redirect('/admin.html?error=upload_failed');
   }
-
-  saveDB(db);
-  addSystemLog(`Generated ${count} key(s) for [${clientName}]`, req);
-  res.json(generatedList);
 });
 
-app.get('/api/keys', (req, res) => {
-  const db = loadDB();
-  const now = new Date();
-  db.keys.forEach(k => {
-    if (k.status !== "BANNED" && new Date(k.expiresAt) < now) k.status = "EXPIRED";
-  });
-  saveDB(db);
-  res.json(db.keys);
-});
-
-app.post('/api/keys/reset-hwid', (req, res) => {
-  const db = loadDB();
-  const k = db.keys.find(item => item.id === req.body.id);
-  if (k) { k.hwid = "UNBOUND"; saveDB(db); addSystemLog(`HWID Reset: ${k.key}`, req); res.json({ success: true }); }
-  else res.status(404).json({ success: false });
-});
-
-app.post('/api/keys/toggle-ban', (req, res) => {
-  const db = loadDB();
-  const k = db.keys.find(item => item.id === req.body.id);
-  if (k) { 
-    k.status = (k.status === "BANNED") ? "ACTIVE" : "BANNED"; 
-    saveDB(db); 
-    addSystemLog(`Key status: [${k.status}] -> ${k.key}`, req);
-    res.json({ success: true, status: k.status }); 
-  } else res.status(404).json({ success: false });
-});
-
-app.delete('/api/keys/:id', (req, res) => {
-  const db = loadDB();
-  const targetKey = db.keys.find(k => k.id === parseInt(req.params.id));
-  db.keys = db.keys.filter(k => k.id !== parseInt(req.params.id));
-  saveDB(db);
-  if (targetKey) addSystemLog(`Key Deleted: ${targetKey.key}`, req);
+app.delete('/api/facilities/:id', authAdmin, async (req, res) => {
+  const db = await getDB();
+  db.facilities = db.facilities.filter(f => f.id !== req.params.id);
+  await saveDB(db);
   res.json({ success: true });
 });
 
-app.post('/api/validate-key', (req, res) => {
-  const { key, userHwid, clientVersion } = req.body;
-  const db = loadDB();
+// BOOKED DATES
+app.get('/api/booked-dates', async (req, res) => {
+  const db = await getDB();
+  res.json(db.bookings.filter(b => b.status === 'APPROVED').map(b => b.checkInDate));
+});
 
-  if (db.maintenance) {
-    return res.json({ success: false, message: "System Under Maintenance!" });
-  }
-
-  if (clientVersion && clientVersion !== db.loaderVersion) {
-    return res.json({ success: false, message: `UPDATE REQUIRED: Loader v${db.loaderVersion} available!` });
-  }
-
-  if (!key) {
-    return res.json({ success: false, message: "Key parameter missing!" });
-  }
-
-  const cleanInputKey = key.toString().trim().toUpperCase();
-  const foundKey = db.keys.find(k => k.key.trim().toUpperCase() === cleanInputKey);
-
-  if (!foundKey) {
-    return res.json({ success: false, message: "Invalid Key!" });
-  }
-
-  if (foundKey.status === "BANNED") {
-    return res.json({ success: false, message: "BANNED" });
-  }
-
-  if (new Date(foundKey.expiresAt) < new Date()) {
-    foundKey.status = "EXPIRED";
-    saveDB(db);
-    return res.json({ success: false, message: "EXPIRED" });
-  }
-
-  const cleanUserHwid = (userHwid || "UNKNOWN").toString().trim();
-
-  if (foundKey.hwid === "UNBOUND") {
-    foundKey.hwid = cleanUserHwid;
-    saveDB(db);
-    addSystemLog(`HWID bound [${foundKey.clientName}]: ${cleanUserHwid}`, req);
-    return res.json({ success: true, clientName: foundKey.clientName, expiresAt: foundKey.expiresAt, message: `Welcome ${foundKey.clientName}!` });
-  } else if (foundKey.hwid === cleanUserHwid) {
-    return res.json({ success: true, clientName: foundKey.clientName, expiresAt: foundKey.expiresAt, message: `Welcome ${foundKey.clientName}!` });
-  } else {
-    return res.json({ success: false, message: "HWID MISMATCH" });
+// SLIDER APIS (CLOUD STORAGE)
+app.get('/api/sliders', async (req, res) => {
+  try {
+    const result = await cloudinary.search
+      .expression('folder:resort_sliders')
+      .sort_by('created_at', 'desc')
+      .execute();
+    const urls = result.resources.map(file => file.secure_url);
+    res.json(urls);
+  } catch (err) {
+    res.json([]);
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.post('/upload-slider', uploadSlider.single('sliderImage'), (req, res) => {
+  try {
+    res.redirect('/admin.html');
+  } catch (err) {
+    res.redirect('/admin.html?error=slider_failed');
+  }
+});
+
+app.delete('/api/sliders/:public_id', authAdmin, async (req, res) => {
+  try {
+    const imageId = req.params.public_id;
+    await cloudinary.uploader.destroy(`resort_sliders/${imageId}`);
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false, message: "Delete failed" });
+  }
+});
+
+// BOOKING SUBMISSION API
+app.post('/api/book', async (req, res) => {
+  const { name, phone, checkInDate, stayType, packageType, guests, notes, gcashRef } = req.body;
+  if (!name || !phone || !checkInDate || !gcashRef) return res.json({ success: false, message: "Please complete all required fields!" });
+
+  const db = await getDB();
+  if (db.bookings.some(b => b.checkInDate === checkInDate && b.status === 'APPROVED')) {
+    return res.json({ success: false, message: "Sorry, this date is already fully booked." });
+  }
+
+  const bookingObj = {
+    id: Date.now(),
+    name: name.trim(),
+    phone: phone.trim(),
+    checkInDate,
+    stayType,
+    packageType,
+    guests: parseInt(guests) || 1,
+    notes: notes ? notes.trim() : "",
+    gcashRef: gcashRef.trim(),
+    status: "PENDING",
+    createdAt: new Date().toLocaleString()
+  };
+
+  db.bookings.unshift(bookingObj);
+  await saveDB(db);
+
+  const emailContent = 
+    `🌴 BAGONG BOOKING REQUEST - CASA LIEZL PRIVATE RESORT 🌴\n\n` +
+    `Name: ${bookingObj.name}\n` +
+    `Phone: ${bookingObj.phone}\n` +
+    `Check-in Date: ${bookingObj.checkInDate} (${bookingObj.stayType})\n` +
+    `Package: ${bookingObj.packageType} (${bookingObj.guests} Pax)\n` +
+    `GCash Reference No: ${bookingObj.gcashRef}\n` +
+    `Notes: ${bookingObj.notes || 'Wala'}\n\n` +
+    `Pakicheck ang Admin Panel para ma-verify ang GCash deposit!`;
+
+  sendEmailNotification(`[CASA LIEZL PRIVATE] New Booking Request from ${bookingObj.name}`, emailContent);
+
+  res.json({ success: true, message: "Reservation request submitted successfully!", bookingId: bookingObj.id });
+});
+
+// ADMIN APIS
+app.post('/api/admin/login', (req, res) => {
+  const { username, password } = req.body;
+  if ((username || '').trim().toUpperCase() === ADMIN_USER && (password || '').trim() === ADMIN_PASS) {
+    const token = crypto.randomBytes(32).toString('hex');
+    activeSessions.add(token);
+
+    if (activeSessions.size > 50) {
+      const firstToken = activeSessions.values().next().value;
+      activeSessions.delete(firstToken);
+    }
+
+    res.json({ success: true, token });
+  } else {
+    res.status(401).json({ success: false, message: "Invalid Username or Password!" });
+  }
+});
+
+app.get('/api/admin/bookings', authAdmin, async (req, res) => {
+  const db = await getDB();
+  res.json(db.bookings || []);
+});
+
+app.post('/api/admin/process-booking', authAdmin, async (req, res) => {
+  const { id, action } = req.body;
+  const db = await getDB();
+  const target = db.bookings.find(b => b.id === parseInt(id));
+  if (!target) return res.status(404).json({ success: false, message: "Booking not found" });
+
+  if (action === 'APPROVE') target.status = 'APPROVED';
+  else if (action === 'REJECT') target.status = 'REJECTED';
+
+  await saveDB(db);
+
+  sendEmailNotification(
+    `[CASA LIEZL PRIVATE] Booking ${target.status}: ${target.name}`,
+    `Ang reservation ni ${target.name} para sa petsang ${target.checkInDate} ay na-update ang status sa: ${target.status}`
+  );
+
+  res.json({ success: true, status: target.status });
+});
+
+app.listen(PORT, () => console.log(`Casa Liezl Private Resort Server running on port ${PORT} with MongoDB & Cloudinary!`));
